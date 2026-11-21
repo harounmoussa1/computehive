@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>tn.eniso.computehive</groupId>
+        <artifactId>machines</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>machines-ws-rest</artifactId>
+    <name>ComputeHive :: Machines :: WS REST</name>
+    <description>Machines : couche ws-rest</description>
+
+    <properties>
+        <pyramid.banned.1>tn.eniso.computehive:*-service-impl</pyramid.banned.1>
+        <pyramid.banned.2>tn.eniso.computehive:*-dal-*</pyramid.banned.2>
+        <pyramid.banned.3>tn.eniso.computehive:*-cli</pyramid.banned.3>
+        <pyramid.banned.4>tn.eniso.computehive:driver-*</pyramid.banned.4>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>machines-service-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>core-ws-rest</artifactId>
+        </dependency>
+    </dependencies>
+</project>

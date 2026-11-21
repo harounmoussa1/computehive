@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>tn.eniso.computehive</groupId>
+        <artifactId>modules</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>jobs</artifactId>
+    <packaging>pom</packaging>
+    <name>ComputeHive :: Jobs</name>
+    <description>Cycle de vie des jobs soumis par les utilisateurs</description>
+
+    <modules>
+        <module>jobs-infra</module>
+        <module>jobs-dal-api</module>
+        <module>jobs-dal-jpa</module>
+        <module>jobs-service-api</module>
+        <module>jobs-service-impl</module>
+        <module>jobs-ws-rest</module>
+        <module>jobs-service-rest-cli</module>
+    </modules>
+</project>

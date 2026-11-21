@@ -1,0 +1,8 @@
+/**
+ * <p>Module <b>scheduling</b> — placement des jobs, réattribution, fencing et dialogue avec les agents.</p>
+ *
+ * <p>Couche <b>dal-api</b> : interfaces des repositories. Chaque repository appartient à exactement un service CRUD du {@code service-impl}.</p>
+ *
+ * <p>Contenu prévu : {@code AssignmentRepository}, {@code ProcessedAgentMessageRepository}.</p>
+ */
+package tn.eniso.computehive.modules.scheduling.dal.api;

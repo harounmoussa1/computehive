@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>tn.eniso.computehive</groupId>
+        <artifactId>drivers</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>driver-storage-remote</artifactId>
+    <name>ComputeHive :: Driver :: Storage Remote</name>
+    <description>Stockage distant simulé, protégé par circuit breaker et retries (Resilience4j).</description>
+
+    <properties>
+        <pyramid.banned.1>tn.eniso.computehive:driver-*</pyramid.banned.1>
+        <pyramid.banned.2>tn.eniso.computehive:jobs-*</pyramid.banned.2>
+        <pyramid.banned.3>tn.eniso.computehive:machines-*</pyramid.banned.3>
+        <pyramid.banned.4>tn.eniso.computehive:scheduling-*</pyramid.banned.4>
+        <pyramid.banned.5>tn.eniso.computehive:quotas-*</pyramid.banned.5>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>checkpoint-storage-api</artifactId>
+        </dependency>
+    </dependencies>
+</project>

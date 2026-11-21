@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>tn.eniso.computehive</groupId>
+        <artifactId>core</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>core-service-api</artifactId>
+    <name>ComputeHive :: Core :: Service API</name>
+    <description>Contrat des intercepteurs d'entités (BEFORE_* / AFTER_*), utilisé par les services CRUD de chaque module.</description>
+
+    <properties>
+        <pyramid.banned.1>tn.eniso.computehive:*-service-impl</pyramid.banned.1>
+        <pyramid.banned.2>tn.eniso.computehive:*-dal-*</pyramid.banned.2>
+        <pyramid.banned.3>tn.eniso.computehive:*-ws-*</pyramid.banned.3>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>core-infra</artifactId>
+        </dependency>
+    </dependencies>
+</project>

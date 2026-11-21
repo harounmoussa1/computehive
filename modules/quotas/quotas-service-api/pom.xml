@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>tn.eniso.computehive</groupId>
+        <artifactId>quotas</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>quotas-service-api</artifactId>
+    <name>ComputeHive :: Quotas :: Service API</name>
+    <description>Quotas : couche service-api</description>
+
+    <properties>
+        <pyramid.banned.1>tn.eniso.computehive:*-service-impl</pyramid.banned.1>
+        <pyramid.banned.2>tn.eniso.computehive:*-dal-*</pyramid.banned.2>
+        <pyramid.banned.3>tn.eniso.computehive:*-ws-*</pyramid.banned.3>
+        <pyramid.banned.4>tn.eniso.computehive:*-cli</pyramid.banned.4>
+        <pyramid.banned.5>tn.eniso.computehive:driver-*</pyramid.banned.5>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>quotas-infra</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>core-service-api</artifactId>
+        </dependency>
+    </dependencies>
+</project>

@@ -1,0 +1,179 @@
+// Contrat ComputeHive entre le serveur et l'agent (worker), version 1.
+//
+// Seule source de vérité entre les deux programmes : le serveur (Java) et l'agent (Rust)
+// génèrent leur code depuis ce fichier. Toute modification passe par une PR relue par
+// les deux membres du binôme. Règles de compatibilité : ne jamais réutiliser ni renuméroter
+// un champ ; un champ supprimé devient `reserved`.
+// Explications : docs/worker-protocol.md.
+
+syntax = "proto3";
+
+package computehive.worker.v1;
+
+option java_multiple_files = true;
+option java_package = "tn.eniso.computehive.contracts.worker.v1";
+
+// L'agent ouvre le stream. Le serveur répond sur le même stream.
+service WorkerGateway {
+  rpc Connect (stream AgentMessage) returns (stream ServerCommand);
+}
+
+// ───────────────────────── Agent → Serveur ─────────────────────────
+
+message AgentMessage {
+  // Identifiant unique du message, généré par l'agent.
+  // Permet au serveur d'ignorer un message renvoyé deux fois par l'outbox.
+  string message_id = 1;
+
+  oneof payload {
+    Register        register         = 10;
+    Heartbeat       heartbeat        = 11;
+    Progress        progress         = 12;
+    CheckpointSaved checkpoint_saved = 13;
+    Finished        finished         = 14;
+    CommandAck      command_ack      = 15;
+  }
+}
+
+// Premier message envoyé sur chaque nouveau stream (y compris après une reconnexion).
+message Register {
+  string agent_id      = 1;  // identifiant stable, généré une fois et conservé par l'agent
+  string name          = 2;  // ex. "labo-pc-12"
+  string agent_version = 3;
+  string os            = 4;  // "linux" | "windows"
+  int32  cpu_cores     = 5;
+  int64  ram_total_mb  = 6;
+  repeated GpuInfo gpus = 7; // vide = worker CPU
+  Capabilities capabilities = 8;
+  repeated RunningJob running = 9;  // jobs en cours sur ce PC (resynchronisation)
+}
+
+message GpuInfo {
+  int32  index           = 1;
+  string name            = 2;  // ex. "NVIDIA GeForce RTX 3060"
+  int64  memory_total_mb = 3;
+  string driver_version  = 4;
+  string cuda_version    = 5;
+}
+
+message Capabilities {
+  bool cuda       = 1;
+  bool containers = 2;
+}
+
+message Heartbeat {
+  repeated GpuSample gpus    = 1;
+  double             cpu_percent = 2;
+  int64              ram_free_mb = 3;
+  repeated RunningJob running    = 4;  // permet au serveur de détecter un job fantôme
+}
+
+message GpuSample {
+  int32 index               = 1;
+  int64 memory_free_mb      = 2;
+  int32 utilization_percent = 3;
+  int32 temperature_c       = 4;
+}
+
+message RunningJob {
+  string job_id     = 1;
+  int64  attempt_id = 2;
+}
+
+message Progress {
+  string job_id       = 1;
+  int64  attempt_id   = 2;
+  int32  epoch        = 3;  // epoch d'entraînement
+  int32  total_epochs = 4;
+  double loss         = 5;
+  double percent      = 6;
+}
+
+// Envoyé APRÈS que le fichier de checkpoint a été déposé (voir §8).
+message CheckpointSaved {
+  string job_id      = 1;
+  int64  attempt_id  = 2;
+  int32  epoch       = 3;
+  string storage_key = 4;
+  string sha256      = 5;
+  int64  size_bytes  = 6;
+}
+
+message Finished {
+  string  job_id      = 1;
+  int64   attempt_id  = 2;
+  Outcome outcome     = 3;
+  double  accuracy    = 4;  // si SUCCEEDED
+  string  error       = 5;  // si FAILED
+  int32   last_checkpoint_epoch = 6;
+}
+
+enum Outcome {
+  OUTCOME_UNSPECIFIED = 0;
+  SUCCEEDED           = 1;
+  FAILED              = 2;  // le script a échoué (y compris après les relances locales)
+  STOPPED             = 3;  // arrêté suite à un StopJob
+}
+
+message CommandAck {
+  string command_id = 1;
+  bool   accepted   = 2;
+  string reason     = 3;  // si refusé (ex. "GPU déjà occupé", "disque plein")
+}
+
+// ───────────────────────── Serveur → Agent ─────────────────────────
+
+message ServerCommand {
+  // Identifiant unique de l'ordre. L'agent ne l'exécute qu'une fois.
+  string command_id = 1;
+
+  oneof payload {
+    Registered        registered = 10;
+    LaunchJob         launch     = 11;
+    StopJob           stop       = 12;
+    TriggerCheckpoint checkpoint = 13;
+  }
+}
+
+// Réponse à Register : le serveur fixe les règles du jeu.
+message Registered {
+  string machine_id                 = 1;
+  int32  heartbeat_interval_seconds = 2;  // 10 par défaut
+  int32  lease_ttl_seconds          = 3;  // 30 par défaut : délai au-delà duquel la machine est DEAD
+}
+
+message LaunchJob {
+  string    job_id      = 1;
+  int64     attempt_id  = 2;
+  string    job_type    = 3;  // type prédéfini, ex. "MNIST_TRAIN"
+  JobParams params      = 4;
+  repeated int32 gpu_indices = 5;
+  int32  resume_from_epoch      = 6;  // 0 = démarrage depuis zéro
+  string resume_checkpoint_key  = 7;
+  string resume_checkpoint_sha256 = 8;
+}
+
+message JobParams {
+  int32  epochs        = 1;
+  double learning_rate = 2;
+  int32  batch_size    = 3;
+}
+
+message StopJob {
+  string     job_id           = 1;
+  int64      attempt_id       = 2;
+  StopReason reason           = 3;
+  bool       checkpoint_first = 4;  // true = sauvegarder avant d'arrêter
+}
+
+enum StopReason {
+  STOP_REASON_UNSPECIFIED = 0;
+  CANCELLED               = 1;  // l'utilisateur a annulé le job
+  STALE_ATTEMPT           = 2;  // tentative périmée (fencing)
+  REASSIGNED              = 3;  // le serveur déplace le job
+}
+
+message TriggerCheckpoint {
+  string job_id     = 1;
+  int64  attempt_id = 2;
+}

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>tn.eniso.computehive</groupId>
+        <artifactId>computehive-root</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>drivers</artifactId>
+    <packaging>pom</packaging>
+    <name>ComputeHive :: Drivers</name>
+    <description>Implémentations des contrats d'extension. Un driver ne dépend jamais d'un module ni d'un autre driver.</description>
+
+    <modules>
+        <module>driver-broker-memory</module>
+        <module>driver-broker-kafka</module>
+        <module>driver-notif-log</module>
+        <module>driver-notif-email</module>
+        <module>driver-storage-local</module>
+        <module>driver-storage-remote</module>
+    </modules>
+</project>

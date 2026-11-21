@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>tn.eniso.computehive</groupId>
+        <artifactId>modules</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>scheduling</artifactId>
+    <packaging>pom</packaging>
+    <name>ComputeHive :: Scheduling</name>
+    <description>Placement des jobs, réattribution, fencing et dialogue avec les agents</description>
+
+    <modules>
+        <module>scheduling-infra</module>
+        <module>scheduling-dal-api</module>
+        <module>scheduling-dal-jpa</module>
+        <module>scheduling-service-api</module>
+        <module>scheduling-service-impl</module>
+        <module>scheduling-ws-rest</module>
+        <module>scheduling-ws-grpc</module>
+        <module>scheduling-service-rest-cli</module>
+    </modules>
+</project>
