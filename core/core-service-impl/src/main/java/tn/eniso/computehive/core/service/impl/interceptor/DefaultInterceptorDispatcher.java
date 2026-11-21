@@ -2,9 +2,13 @@ package tn.eniso.computehive.core.service.impl.interceptor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tn.eniso.computehive.core.service.api.interceptor.EntityInterceptor;
 import tn.eniso.computehive.core.service.api.interceptor.InterceptorDispatcher;
 import tn.eniso.computehive.core.service.api.interceptor.InterceptorEvent;
@@ -26,6 +30,12 @@ import java.util.Objects;
  *       autre module le fait hors de la transaction d'origine : une transaction reste
  *       limitée à un module.</li>
  * </ul>
+ *
+ * <p>Chaque {@code AFTER_*} s'exécute dans <b>sa propre transaction</b> ({@code REQUIRES_NEW}). Au moment de
+ * {@code afterCommit}, Spring garde encore attachées les ressources de la transaction qui vient d'être validée :
+ * une écriture faite avec la propagation par défaut ({@code REQUIRED}) y participerait et ne serait jamais
+ * validée, sans aucune erreur (voir la javadoc de {@link TransactionSynchronization#afterCommit()}). Une
+ * transaction neuve par intercepteur garantit aussi que l'échec de l'un n'annule pas le travail des autres.</p>
  */
 @Component
 public class DefaultInterceptorDispatcher implements InterceptorDispatcher {
@@ -33,9 +43,22 @@ public class DefaultInterceptorDispatcher implements InterceptorDispatcher {
     private static final Logger log = LoggerFactory.getLogger(DefaultInterceptorDispatcher.class);
 
     private final InterceptorRegistry registry;
+    private final TransactionTemplate newTransaction;
 
-    public DefaultInterceptorDispatcher(InterceptorRegistry registry) {
+    public DefaultInterceptorDispatcher(InterceptorRegistry registry,
+                                        ObjectProvider<PlatformTransactionManager> transactionManager) {
+        this(registry, transactionManager.getIfAvailable());
+    }
+
+    /** @param transactionManager {@code null} si l'application n'a pas de base de données : pas de transaction */
+    DefaultInterceptorDispatcher(InterceptorRegistry registry, PlatformTransactionManager transactionManager) {
         this.registry = registry;
+        if (transactionManager == null) {
+            this.newTransaction = null;
+        } else {
+            this.newTransaction = new TransactionTemplate(transactionManager);
+            this.newTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        }
     }
 
     @Override
@@ -63,12 +86,22 @@ public class DefaultInterceptorDispatcher implements InterceptorDispatcher {
     private <T> void runAfter(List<EntityInterceptor<T>> interceptors, InterceptorEvent<T> event) {
         for (EntityInterceptor<T> interceptor : interceptors) {
             try {
-                interceptor.onEvent(event);
+                if (newTransaction == null) {
+                    interceptor.onEvent(event);
+                } else {
+                    newTransaction.executeWithoutResult(status -> interceptor.onEvent(event));
+                }
             } catch (RuntimeException e) {
                 log.error("Interceptor {} failed on {} {}; the operation is already committed",
-                        interceptor.getClass().getSimpleName(), event.phase(),
+                        nameOf(interceptor), event.phase(),
                         event.entity().getClass().getSimpleName(), e);
             }
         }
+    }
+
+    /** Nom lisible dans les logs, y compris pour une classe anonyme. */
+    private static String nameOf(EntityInterceptor<?> interceptor) {
+        String simpleName = interceptor.getClass().getSimpleName();
+        return simpleName.isEmpty() ? interceptor.getClass().getName() : simpleName;
     }
 }
