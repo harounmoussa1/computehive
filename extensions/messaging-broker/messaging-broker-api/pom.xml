@@ -11,7 +11,7 @@
 
     <artifactId>messaging-broker-api</artifactId>
     <name>ComputeHive :: Messaging Broker :: API</name>
-    <description>Messaging Broker : API</description>
+    <description>Messaging Broker : contrat technique (topics typés, publication, abonnement)</description>
 
     <properties>
         <pyramid.banned.1>tn.eniso.computehive:*-dal-*</pyramid.banned.1>
@@ -24,6 +24,16 @@
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>core-infra</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>
