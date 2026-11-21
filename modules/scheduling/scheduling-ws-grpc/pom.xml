@@ -11,7 +11,7 @@
 
     <artifactId>scheduling-ws-grpc</artifactId>
     <name>ComputeHive :: Scheduling :: WS gRPC</name>
-    <description>Scheduling : couche ws-grpc</description>
+    <description>Scheduling : couche ws-grpc (porte WorkerGateway des agents)</description>
 
     <properties>
         <pyramid.banned.1>tn.eniso.computehive:*-service-impl</pyramid.banned.1>
@@ -28,6 +28,30 @@
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>worker-proto</artifactId>
+        </dependency>
+        <!-- Serveur gRPC (Netty embarqué, sans conflit avec le Netty d'autres bibliothèques) -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-netty-shaded</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-inprocess</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>
