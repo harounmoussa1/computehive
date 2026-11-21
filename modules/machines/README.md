@@ -29,6 +29,17 @@ vivante sans heartbeat depuis `lease-ttl` (30 s).
 - **Heartbeat concurrent** : le bail est revérifié dans la transaction, et le verrouillage
   optimiste (`@Version`) empêche d'écraser un heartbeat arrivé entre-temps.
 
+## Annonce des pannes (`MachineDead`)
+
+Quand une machine **passe** à `DEAD` (détection de panne ou `markDead`), l'intercepteur
+`MachineDeadPublisher` publie `MachinesEvents.MACHINE_DEAD` (topic `machines.machine-dead`,
+clé : l'id de la machine, contenu : `MachineDeadEvent`) sur l'extension `messaging-broker`.
+
+- Intercepteur `AFTER_UPDATE` : exécuté après le commit, il n'annonce jamais une panne annulée.
+- Passer par le broker fonctionne aussi en M/P, où `scheduling` tourne dans un autre processus.
+- Une machine déjà `DEAD` n'est pas annoncée une seconde fois ; une machine revenue puis à nouveau
+  en panne l'est de nouveau. La livraison est « au moins une fois » : l'abonné doit être idempotent.
+
 ## Choix d'une machine (`findAvailable`)
 
 | Job | Machines retenues | Ordre |
@@ -56,11 +67,11 @@ Schéma PostgreSQL `machines`, table `machine`, migrations Flyway dans
 
 | Sous-projet | Contenu |
 |---|---|
-| `machines-infra` | `Machine`, `MachineStatus`, `MachineKind`, DTO (`MachineInfo`, `MachineRegistration`…) |
+| `machines-infra` | `Machine`, `MachineStatus`, `MachineKind`, DTO (`MachineInfo`, `MachineRegistration`, `MachineDeadEvent`…) |
 | `machines-dal-api` | `MachineRepository` |
 | `machines-dal-jpa` | `JpaMachine`, `JpaMachineRepository`, migrations |
-| `machines-service-api` | Façade `MachinesModule` |
-| `machines-service-impl` | `MachineCrudService`, `MachinesModuleImpl`, `MachineSelector`, `MachineFailureDetector` |
+| `machines-service-api` | Façade `MachinesModule`, topics publiés `MachinesEvents` |
+| `machines-service-impl` | `MachineCrudService`, `MachinesModuleImpl`, `MachineSelector`, `MachineFailureDetector`, `MachineDeadPublisher` |
 | `machines-ws-rest` | `GET /api/machines`, `GET /api/machines/{id}` |
 | `machines-service-rest-cli` | Réservé au mode M/P (étape d'assemblage) |
 
@@ -68,6 +79,5 @@ La façade renvoie `MachineInfo` (immuable) ; l'entité `Machine` ne sort jamais
 
 ## À venir
 
-- Publication de l'événement `MachineDead` sur `messaging-broker-api` (étape messagerie), pour que
-  `scheduling` réattribue les jobs, y compris en mode M/P.
+- Abonnement de `scheduling` à `machines.machine-dead` pour réattribuer les jobs (étapes 5 et 6).
 - `machines-service-rest-cli` (étape assemblage M/P).

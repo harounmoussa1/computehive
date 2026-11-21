@@ -3,6 +3,6 @@
  *
  * <p>Couche <b>service-api</b> : façade du module, son unique contrat public. Les autres modules et la couche WS ne voient que cette interface.</p>
  *
- * <p>Contenu : façade {@code MachinesModule} (register, heartbeat, findAvailable, reserve, release, markDead, findById, findAll, leasePolicy).</p>
+ * <p>Contenu : façade {@code MachinesModule} (register, heartbeat, findAvailable, reserve, release, markDead, findById, findAll, leasePolicy) et topics publiés {@code MachinesEvents} ({@code machines.machine-dead}).</p>
  */
 package tn.eniso.computehive.modules.machines.service.api;
