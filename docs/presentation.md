@@ -405,8 +405,8 @@ Un job simulé affiche les mêmes lignes sans PyTorch, pour les tests.
 |---|---|---|
 | 0 | Structure Pyramid complète (48 sous-projets) | ✅ |
 | 1 | Socle : core, `worker.proto`, règles d'architecture, CI | ✅ |
-| 2 | Module `machines` : inscription, heartbeats, détection de panne | 🟡 codé, en validation |
-| 3 | Module `jobs` | ⏳ |
+| 2 | Module `machines` : inscription, heartbeats, détection de panne | ✅ |
+| 3 | Module `jobs` : soumission, annulation, statuts, avancement, checkpoints, API REST | ✅ |
 | 4 | Messagerie (mémoire, puis Kafka) | ⏳ |
 | 5 | `scheduling` + porte gRPC + faux agent | ⏳ |
 | 6 | Réattribution, fencing, quotas, notifications | ⏳ |
