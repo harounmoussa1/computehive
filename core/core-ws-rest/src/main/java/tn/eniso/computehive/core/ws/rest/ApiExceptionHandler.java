@@ -3,10 +3,14 @@ package tn.eniso.computehive.core.ws.rest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import tn.eniso.computehive.core.infra.exception.ConflictException;
 import tn.eniso.computehive.core.infra.exception.NotFoundException;
 import tn.eniso.computehive.core.infra.exception.ValidationException;
@@ -36,11 +40,44 @@ public class ApiExceptionHandler {
         return problem(HttpStatus.CONFLICT, e.getMessage());
     }
 
-    /** Erreur imprévue : détail journalisé, mais jamais renvoyé au client. */
+    /**
+     * Corps de requête illisible : JSON mal formé, valeur d'énumération inconnue, ou objet valeur
+     * du domaine qui refuse ses données (sa {@link ValidationException} est alors enveloppée par Jackson).
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ProblemDetail handleUnreadableBody(HttpMessageNotReadableException e) {
+        ValidationException validation = findCause(e, ValidationException.class);
+        return problem(HttpStatus.BAD_REQUEST, validation != null ? validation.getMessage() : "Malformed request body");
+    }
+
+    /** Paramètre de requête ou de chemin impossible à convertir, ex. {@code ?status=FOO}. */
+    @ExceptionHandler(TypeMismatchException.class)
+    public ProblemDetail handleTypeMismatch(TypeMismatchException e) {
+        String name = e instanceof MethodArgumentTypeMismatchException mismatch ? mismatch.getName() : e.getPropertyName();
+        return problem(HttpStatus.BAD_REQUEST, "Invalid value '" + e.getValue() + "' for parameter '" + name + "'");
+    }
+
+    /**
+     * Erreur imprévue : détail journalisé, mais jamais renvoyé au client. Les erreurs HTTP standard
+     * de Spring MVC (en-tête manquant, méthode non supportée…) gardent leur statut (400, 405…).
+     */
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpected(Exception e) {
+        if (e instanceof ErrorResponse standard) {
+            HttpStatus status = HttpStatus.valueOf(standard.getStatusCode().value());
+            return problem(status, standard.getBody().getDetail());
+        }
         log.error("Unexpected error while handling request", e);
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected server error");
+    }
+
+    private static <T extends Throwable> T findCause(Throwable error, Class<T> type) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (type.isInstance(cause)) {
+                return type.cast(cause);
+            }
+        }
+        return null;
     }
 
     private static ProblemDetail problem(HttpStatus status, String detail) {
