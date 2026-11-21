@@ -69,6 +69,9 @@ class JpaAssignment {
     @Column(name = "launch_send_count", nullable = false)
     private int launchSendCount;
 
+    @Column(name = "running_since")
+    private Instant runningSince;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -101,6 +104,7 @@ class JpaAssignment {
         entity.launchCommandId = assignment.getLaunchCommandId();
         entity.launchSentAt = assignment.getLaunchSentAt();
         entity.launchSendCount = assignment.getLaunchSendCount();
+        entity.runningSince = assignment.getRunningSince();
         entity.createdAt = assignment.getCreatedAt();
         entity.endedAt = assignment.getEndedAt();
         entity.endReason = assignment.getEndReason();
@@ -119,6 +123,7 @@ class JpaAssignment {
         assignment.setLaunchCommandId(launchCommandId);
         assignment.setLaunchSentAt(launchSentAt);
         assignment.setLaunchSendCount(launchSendCount);
+        assignment.setRunningSince(runningSince);
         assignment.setCreatedAt(createdAt);
         assignment.setEndedAt(endedAt);
         assignment.setEndReason(endReason);

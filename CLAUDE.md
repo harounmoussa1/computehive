@@ -194,6 +194,8 @@ Le job simulé de secours affiche les mêmes lignes sans PyTorch.
 - Événements entre modules (ADR 0006) : le topic (`Topic<E>`) est déclaré par le module émetteur dans
   son `service-api` (ex. `MachinesEvents`), publié depuis un intercepteur `AFTER_*` ; livraison
   asynchrone et « au moins une fois », donc tout abonné est idempotent (`eventId`).
+- Réattribution (ADR 0007) : réagir aux événements, réparer par réconciliation périodique ; tout traitement
+  se fonde sur l'état courant (idempotent), jamais sur le seul contenu de l'événement.
 - Données : un schéma PostgreSQL par module, migrations Flyway dans `db/migration/<module>`,
   `ddl-auto=validate` (ADR 0005). Entité JPA (`JpaXxx`, package-private) séparée de l'entité du domaine.
 - La façade renvoie des vues immuables (`XxxInfo`) ; l'entité du domaine ne sort pas du module.

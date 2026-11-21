@@ -52,8 +52,24 @@ Pour chaque job `PENDING` ou `REASSIGNED`, du plus ancien au plus récent :
   active reçoit `StopJob(STALE_ATTEMPT)`.
 - **Dédoublonnage** : un `message_id` déjà traité est ignoré (table `processed_agent_message`, purgée
   après 24 h). Il n'est marqué qu'**après** application : un message rejoué après un échec est retraité.
-- **Annulation** : un job annulé est arrêté (`StopJob(CANCELLED)`, machine libérée) au prochain message
+- **Annulation** : arrêt immédiat sur `jobs.job-cancelled` (voir ci-dessous) ; à défaut, au prochain message
+  de l'agent ou à la prochaine réconciliation.
   de son agent.
+
+## Réattribution (`Reassignment`, ADR 0007)
+
+| Situation | Détection | Effet |
+|---|---|---|
+| machine en panne | événement `machines.machine-dead` | tentatives `LOST`, jobs `REASSIGNED`, relancés ailleurs depuis leur checkpoint (`attemptId + 1`) |
+| job annulé | événement `jobs.job-cancelled` | tentative `STOPPED`, `StopJob(CANCELLED)`, machine libérée |
+| job disparu de sa machine | absent de la liste `running` d'un heartbeat, plus de 30 s après sa confirmation | tentative `LOST`, job `REASSIGNED`, machine libérée |
+
+Les abonnements sont ouverts au démarrage (`SchedulingSubscriptions`, abonnés `scheduling.reassignment` et
+`scheduling.cancellation`). Les traitements se fondent sur l'état courant : ils sont idempotents.
+
+**Réconciliation** (`Reconciler`, toutes les 15 s) : si un événement s'est perdu ou si un traitement a été
+interrompu, l'état est réparé à la passe suivante (tentative active sur une machine `DEAD`, tentative d'un job
+terminé, job `RUNNING` sans tentative active).
 
 ## LaunchJob sans réponse (`LaunchWatchdog`)
 
@@ -101,6 +117,8 @@ computehive:
     launch-watchdog-interval: 5s
     processed-message-retention: 24h
     purge-interval: 1h
+    reconciliation-interval: 15s
+    lost-job-grace: 30s
   grpc:
     port: 9090
     keep-alive-time: 30s
@@ -112,7 +130,8 @@ computehive:
 ## Données
 
 Schéma PostgreSQL `scheduling`, tables `assignment` et `processed_agent_message`, migrations Flyway
-dans `scheduling-dal-jpa/src/main/resources/db/migration/scheduling` (voir ADR 0005).
+dans `scheduling-dal-jpa/src/main/resources/db/migration/scheduling` (voir ADR 0005) : `V1` crée les tables,
+`V2` ajoute `assignment.running_since` (date de confirmation par l'agent).
 
 ## Sous-projets
 
@@ -122,7 +141,7 @@ dans `scheduling-dal-jpa/src/main/resources/db/migration/scheduling` (voir ADR 0
 | `scheduling-dal-api` | `AssignmentRepository`, `ProcessedAgentMessageRepository` |
 | `scheduling-dal-jpa` | entités JPA, adaptateurs, migrations |
 | `scheduling-service-api` | façade `SchedulingModule`, port `AgentChannel` |
-| `scheduling-service-impl` | services CRUD, `SchedulingModuleImpl`, `JobPlacement`, `LaunchWatchdog`, `Fencing`, `AttemptLifecycle` |
+| `scheduling-service-impl` | services CRUD, `SchedulingModuleImpl`, `JobPlacement`, `LaunchWatchdog`, `Fencing`, `AttemptLifecycle`, `Reassignment`, `SchedulingSubscriptions`, `Reconciler` |
 | `scheduling-ws-grpc` | `WorkerGatewayService`, `ProtoTranslator`, `AgentSessionRegistry` (implémente `AgentChannel`), `WorkerGatewayServer` |
 | `scheduling-ws-rest`, `scheduling-service-rest-cli` | réservés au mode M/P (étape d'assemblage) |
 
@@ -135,11 +154,10 @@ dans `scheduling-dal-jpa/src/main/resources/db/migration/scheduling` (voir ADR 0
 | `AssignmentCrudServiceTest` | intercepteurs autour de chaque écriture |
 | `WorkerGatewayServiceTest` | porte gRPC (serveur en mémoire, faux agent) : traduction, ordres, inscription, reconnexion, erreurs |
 | `WorkerGatewayServerTest` | vrai serveur Netty sur un port libre : connexion d'un agent par le réseau, arrêt propre |
+| `ReassignmentScenariosTest` | 13 scénarios : panne de machine et reprise depuis le checkpoint, ancienne machine écartée par le fencing, job disparu, annulation, réconciliation après un événement perdu, abonnements |
 | `SchedulingScenariosTest` | 26 scénarios : placement, refus, accusé perdu, message rejoué, tentative périmée, reprise depuis un checkpoint, resynchronisation, annulation, renvoi puis abandon |
 
-## À venir (étape 6)
+## À venir
 
 - Priorité de placement par quotas d'utilisation (aujourd'hui : premier arrivé, premier servi).
-- Réattribution des jobs sur `machines.machine-dead`, et arrêt immédiat sur annulation d'un job.
-- Détection d'un job absent de la liste `running` de sa machine (job perdu).
 - Vérification du SHA-256 d'un checkpoint auprès de l'extension `checkpoint-storage` (étape 8).

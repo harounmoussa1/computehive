@@ -18,6 +18,8 @@ interface SpringDataAssignmentRepository extends JpaRepository<JpaAssignment, St
 
     Optional<JpaAssignment> findByJobIdAndStatusIn(String jobId, Collection<AssignmentStatus> statuses);
 
+    List<JpaAssignment> findByStatusIn(Collection<AssignmentStatus> statuses, Sort sort);
+
     List<JpaAssignment> findByMachineIdAndStatusIn(String machineId, Collection<AssignmentStatus> statuses, Sort sort);
 
     Optional<JpaAssignment> findByLaunchCommandId(String launchCommandId);

@@ -48,6 +48,14 @@ Chaque écriture passe par `JobCrudService`, qui l'annonce aux intercepteurs (`B
 ces derniers après le commit). C'est ainsi que `quotas` apprendra qu'un job est passé à `DONE`,
 sans que `jobs` dépende de `quotas`.
 
+## Événements publiés
+
+| Topic | Quand | Abonné |
+|---|---|---|
+| `jobs.job-cancelled` (`JobsEvents.JOB_CANCELLED`) | un job passe à `CANCELLED` | `scheduling` : arrêt immédiat de l'agent |
+
+Publié par l'intercepteur `JobCancelledPublisher` (`AFTER_UPDATE`, donc après le commit ; ADR 0006).
+
 ## API REST
 
 | Requête | Effet | Réponses |
@@ -95,8 +103,8 @@ Schéma PostgreSQL `jobs`, table `job`, migrations Flyway dans
 | `jobs-infra` | `Job`, `JobStatus`, `JobType`, DTO (`JobInfo`, `JobSubmission`, `JobStatusUpdate`, `JobProgress`, `JobCheckpoint`…) |
 | `jobs-dal-api` | `JobRepository` |
 | `jobs-dal-jpa` | `JpaJob`, `JpaJobRepository`, migrations |
-| `jobs-service-api` | Façade `JobsModule` |
-| `jobs-service-impl` | `JobCrudService`, `JobsModuleImpl` |
+| `jobs-service-api` | Façade `JobsModule`, topics publiés `JobsEvents` |
+| `jobs-service-impl` | `JobCrudService`, `JobsModuleImpl`, `JobCancelledPublisher` |
 | `jobs-ws-rest` | `JobsController`, `SubmitJobRequest` |
 | `jobs-service-rest-cli` | Réservé au mode M/P (étape d'assemblage) |
 
@@ -108,11 +116,11 @@ Schéma PostgreSQL `jobs`, table `job`, migrations Flyway dans
 | `JpaJobRepositoryIT` | migrations, correspondance entité ↔ table, filtres, verrouillage optimiste (PostgreSQL, Testcontainers) |
 | `JobCrudServiceTest` | appel des intercepteurs autour de chaque écriture |
 | `JobsModuleImplTest` | cycle de vie complet avec panne et reprise, conflits, checkpoint rejoué |
+| `JobCancelledPublisherTest` | publication de `jobs.job-cancelled`, une seule fois par annulation |
 | `JobsControllerTest` | codes HTTP, `Location`, en-têtes d'identité, filtres |
 
 ## À venir
 
-- Arrêt de l'agent quand un job `RUNNING` est annulé : aujourd'hui au prochain message de son agent (`scheduling`), immédiatement à l'étape 6.
 - Notification de fin de job via l'extension `notifications-api` (étape 6).
 - Seul le propriétaire pourra annuler son job, quand une authentification existera.
 - Conflit de version (`OptimisticLockingFailureException`) traduit en HTTP 409 par `core-ws-rest`.

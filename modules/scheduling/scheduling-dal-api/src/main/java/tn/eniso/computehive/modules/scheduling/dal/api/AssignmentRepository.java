@@ -26,6 +26,9 @@ public interface AssignmentRepository {
     /** Tentative {@code LAUNCHING} ou {@code RUNNING} du job, s'il en a une. */
     Optional<Assignment> findActiveByJob(String jobId);
 
+    /** Toutes les tentatives {@code LAUNCHING} ou {@code RUNNING} (réconciliation périodique). */
+    List<Assignment> findAllActive();
+
     /** Tentatives {@code LAUNCHING} ou {@code RUNNING} de la machine. */
     List<Assignment> findActiveByMachine(String machineId);
 

@@ -13,7 +13,7 @@ import java.time.Clock;
 
 /**
  * Configuration du module scheduling : lecture de {@link SchedulingProperties} et tâches périodiques
- * (placement des jobs, renvoi des {@code LaunchJob} sans réponse, purge des {@code message_id} traités).
+ * (placement des jobs, renvoi des {@code LaunchJob} sans réponse, réconciliation, purge des {@code message_id} traités).
  */
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
@@ -24,15 +24,17 @@ public class SchedulingConfiguration implements SchedulingConfigurer {
 
     private final JobPlacement placement;
     private final LaunchWatchdog watchdog;
+    private final Reconciler reconciler;
     private final ProcessedAgentMessageCrudService processedMessages;
     private final SchedulingProperties properties;
     private final Clock clock;
 
-    public SchedulingConfiguration(JobPlacement placement, LaunchWatchdog watchdog,
+    public SchedulingConfiguration(JobPlacement placement, LaunchWatchdog watchdog, Reconciler reconciler,
                                    ProcessedAgentMessageCrudService processedMessages,
                                    SchedulingProperties properties, Clock clock) {
         this.placement = placement;
         this.watchdog = watchdog;
+        this.reconciler = reconciler;
         this.processedMessages = processedMessages;
         this.properties = properties;
         this.clock = clock;
@@ -42,6 +44,7 @@ public class SchedulingConfiguration implements SchedulingConfigurer {
     public void configureTasks(ScheduledTaskRegistrar registrar) {
         registrar.addFixedDelayTask(placement::placeWaitingJobs, properties.placementInterval());
         registrar.addFixedDelayTask(watchdog::checkPendingLaunches, properties.launchWatchdogInterval());
+        registrar.addFixedDelayTask(reconciler::reconcile, properties.reconciliationInterval());
         registrar.addFixedDelayTask(this::purgeProcessedMessages, properties.purgeInterval());
     }
 

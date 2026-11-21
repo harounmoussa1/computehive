@@ -58,17 +58,19 @@ public class SchedulingModuleImpl implements SchedulingModule {
     private final ProcessedAgentMessageCrudService processedMessages;
     private final Fencing fencing;
     private final AttemptLifecycle lifecycle;
+    private final Reassignment reassignment;
     private final Clock clock;
 
     public SchedulingModuleImpl(MachinesModule machines, JobsModule jobs, AssignmentCrudService assignments,
                                 ProcessedAgentMessageCrudService processedMessages, Fencing fencing,
-                                AttemptLifecycle lifecycle, Clock clock) {
+                                AttemptLifecycle lifecycle, Reassignment reassignment, Clock clock) {
         this.machines = machines;
         this.jobs = jobs;
         this.assignments = assignments;
         this.processedMessages = processedMessages;
         this.fencing = fencing;
         this.lifecycle = lifecycle;
+        this.reassignment = reassignment;
         this.clock = clock;
     }
 
@@ -207,9 +209,15 @@ public class SchedulingModuleImpl implements SchedulingModule {
 
     /**
      * Resynchronisation : l'agent déclare les jobs qu'il fait tourner. Une tentative active non encore
-     * confirmée l'est (CommandAck perdu) ; toute autre est périmée et doit être arrêtée.
+     * confirmée l'est (CommandAck perdu) ; toute autre est périmée et doit être arrêtée. À l'inverse, une
+     * tentative de cette machine que l'agent ne déclare plus est perdue et son job réattribué.
      */
     private void resync(String machineId, List<RunningAttempt> running) {
+        stopStaleAndConfirm(machineId, running);
+        reassignment.detectLostJobs(machineId, running);
+    }
+
+    private void stopStaleAndConfirm(String machineId, List<RunningAttempt> running) {
         for (RunningAttempt attempt : running) {
             Optional<Assignment> current = fencing.currentAttempt(machineId, attempt.jobId(), attempt.attemptId());
             if (current.isEmpty()) {

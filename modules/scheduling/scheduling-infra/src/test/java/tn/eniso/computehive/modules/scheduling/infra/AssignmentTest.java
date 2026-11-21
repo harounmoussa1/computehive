@@ -44,9 +44,12 @@ class AssignmentTest {
     void confirmRunningIsIdempotent() {
         Assignment assignment = launching();
 
-        assertThat(assignment.confirmRunning()).isTrue();
-        assertThat(assignment.confirmRunning()).isFalse();
+        assertThat(assignment.confirmRunning(T0.plusSeconds(2))).isTrue();
+        assertThat(assignment.confirmRunning(T0.plusSeconds(9))).isFalse();
         assertThat(assignment.getStatus()).isEqualTo(AssignmentStatus.RUNNING);
+        assertThat(assignment.getRunningSince()).as("first confirmation kept").isEqualTo(T0.plusSeconds(2));
+        assertThat(assignment.isRunningSince(T0.plusSeconds(3))).isTrue();
+        assertThat(assignment.isRunningSince(T0.plusSeconds(1))).isFalse();
     }
 
     @Test
@@ -58,7 +61,7 @@ class AssignmentTest {
         assertThat(refused.isActive()).isFalse();
 
         Assignment running = launching();
-        running.confirmRunning();
+        running.confirmRunning(T0);
         assertThatThrownBy(() -> running.reject("late refusal", T0)).isInstanceOf(ConflictException.class);
     }
 
@@ -80,7 +83,7 @@ class AssignmentTest {
         assertThat(assignment.getLaunchSendCount()).isEqualTo(2);
         assertThat(assignment.getLaunchSentAt()).isEqualTo(T0.plusSeconds(15));
 
-        assignment.confirmRunning();
+        assignment.confirmRunning(T0);
         assertThatThrownBy(() -> assignment.recordLaunchResent(T0)).isInstanceOf(ConflictException.class);
     }
 
@@ -94,10 +97,10 @@ class AssignmentTest {
     @Test
     void aLostAttemptCannotComeBack() {
         Assignment assignment = launching();
-        assignment.confirmRunning();
+        assignment.confirmRunning(T0);
         assignment.lose("machine labo-pc-12 is DEAD", T0.plusSeconds(40));
 
-        assertThatThrownBy(assignment::confirmRunning).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> assignment.confirmRunning(T0)).isInstanceOf(ConflictException.class);
         assertThatThrownBy(() -> assignment.complete(T0)).isInstanceOf(ConflictException.class);
     }
 
@@ -123,7 +126,7 @@ class AssignmentTest {
         Assignment assignment = launching();
         Assignment copy = assignment.copy();
 
-        assignment.confirmRunning();
+        assignment.confirmRunning(T0);
 
         assertThat(copy.getStatus()).isEqualTo(AssignmentStatus.LAUNCHING);
     }

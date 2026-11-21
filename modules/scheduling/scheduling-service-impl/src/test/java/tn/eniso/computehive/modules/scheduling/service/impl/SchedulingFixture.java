@@ -47,8 +47,10 @@ class SchedulingFixture {
     final Fencing fencing = new Fencing(assignments, lifecycle);
     final JobPlacement placement = new JobPlacement(jobs, machines, assignments, agents, clock);
     final LaunchWatchdog watchdog = new LaunchWatchdog(assignments, jobs, agents, lifecycle, properties, clock);
+    final Reassignment reassignment = new Reassignment(assignments, jobs, lifecycle, properties, clock);
+    final Reconciler reconciler = new Reconciler(assignments, jobs, machines, lifecycle);
     final SchedulingModuleImpl scheduling =
-            new SchedulingModuleImpl(machines, jobs, assignments, processed, fencing, lifecycle, clock);
+            new SchedulingModuleImpl(machines, jobs, assignments, processed, fencing, lifecycle, reassignment, clock);
 
     private int messages;
 
