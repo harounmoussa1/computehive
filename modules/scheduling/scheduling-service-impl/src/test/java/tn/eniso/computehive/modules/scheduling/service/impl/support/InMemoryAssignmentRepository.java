@@ -72,6 +72,15 @@ public class InMemoryAssignmentRepository implements AssignmentRepository {
     }
 
     @Override
+    public List<Assignment> findAllActive() {
+        return rows.values().stream()
+                .filter(Assignment::isActive)
+                .sorted(Comparator.comparing(Assignment::getCreatedAt))
+                .map(Assignment::copy)
+                .toList();
+    }
+
+    @Override
     public List<Assignment> findActiveByMachine(String machineId) {
         return rows.values().stream()
                 .filter(a -> a.getMachine().id().equals(machineId) && a.isActive())

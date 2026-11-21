@@ -64,7 +64,7 @@ class AssignmentCrudServiceTest {
         when(repository.findById("a-1")).thenReturn(Optional.of(assignment()));
         when(repository.save(any())).thenAnswer(call -> call.getArgument(0));
 
-        Assignment updated = new AssignmentCrudService(repository, interceptors).update("a-1", Assignment::confirmRunning);
+        Assignment updated = new AssignmentCrudService(repository, interceptors).update("a-1", a -> a.confirmRunning(T0));
 
         ArgumentCaptor<Assignment> previous = ArgumentCaptor.forClass(Assignment.class);
         verify(interceptors).dispatch(eq(LifecyclePhase.AFTER_UPDATE), eq(updated), previous.capture());

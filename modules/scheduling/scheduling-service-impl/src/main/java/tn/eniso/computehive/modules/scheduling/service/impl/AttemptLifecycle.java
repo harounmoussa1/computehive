@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import tn.eniso.computehive.core.infra.exception.ConflictException;
 import tn.eniso.computehive.core.infra.exception.NotFoundException;
 import tn.eniso.computehive.modules.jobs.infra.JobInfo;
+import tn.eniso.computehive.modules.jobs.infra.JobStatus;
 import tn.eniso.computehive.modules.jobs.infra.JobStatusUpdate;
 import tn.eniso.computehive.modules.jobs.service.api.JobsModule;
 import tn.eniso.computehive.modules.machines.service.api.MachinesModule;
@@ -16,6 +17,7 @@ import tn.eniso.computehive.modules.scheduling.service.api.AgentChannel;
 import tn.eniso.computehive.modules.scheduling.service.impl.entity.AssignmentCrudService;
 
 import java.time.Clock;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -64,7 +66,7 @@ public class AttemptLifecycle {
             return false;
         }
         if (assignment.getStatus() != AssignmentStatus.RUNNING) {
-            assignments.update(assignment.getId(), Assignment::confirmRunning);
+            assignments.update(assignment.getId(), a -> a.confirmRunning(clock.instant()));
         }
         if (job.status().isWaitingForMachine()) {
             jobs.updateStatus(job.id(), JobStatusUpdate.running(assignment.getMachine()));
@@ -115,6 +117,46 @@ public class AttemptLifecycle {
                 AgentCommand.StopReason.STALE_ATTEMPT);
         log.warn("Attempt {} of job {} on {} abandoned: {}", assignment.getAttemptId(), assignment.getJob().id(),
                 assignment.getMachine().name(), reason);
+    }
+
+    /**
+     * Réattribution : la tentative est perdue (machine en panne, ou job disparu de sa machine). Elle passe
+     * {@code LOST} ; si son job tournait, il passe {@code REASSIGNED} et sera placé ailleurs, depuis son dernier
+     * checkpoint. Une tentative jamais confirmée laisse son job en attente ({@code PENDING}).
+     *
+     * <p>La machine est libérée (sans effet si elle est {@code DEAD}), et l'agent reçoit malgré tout un
+     * {@code StopJob(REASSIGNED)} au cas où il ferait encore tourner le job.</p>
+     */
+    public void reassign(Assignment assignment, String reason) {
+        if (endIfActive(assignment, a -> a.lose(reason, clock.instant()))) {
+            release(assignment);
+        }
+        reassignJobIfRunning(assignment.getJob().id(), assignment.getMachine().id());
+        sendStop(assignment.getMachine().id(), assignment.getJob().id(), assignment.getAttemptId(),
+                AgentCommand.StopReason.REASSIGNED);
+        log.warn("Attempt {} of job {} on {} lost ({}): job will resume elsewhere", assignment.getAttemptId(),
+                assignment.getJob().id(), assignment.getMachine().name(), reason);
+    }
+
+    /**
+     * Remet en attente un job encore {@code RUNNING} sur cette machine alors que sa tentative est terminée.
+     *
+     * @return {@code true} si le job a été remis en attente
+     */
+    public boolean reassignJobIfRunning(String jobId, String machineId) {
+        Optional<JobInfo> job = jobs.findById(jobId);
+        boolean stillRunningThere = job.isPresent() && job.get().status() == JobStatus.RUNNING
+                && job.get().machine() != null && job.get().machine().id().equals(machineId);
+        if (!stillRunningThere) {
+            return false;
+        }
+        try {
+            jobs.updateStatus(jobId, JobStatusUpdate.reassigned());
+            return true;
+        } catch (ConflictException e) {
+            log.debug("Job {} changed meanwhile: {}", jobId, e.getMessage());
+            return false;
+        }
     }
 
     /** Envoie {@code StopJob} à l'agent, s'il est connecté. */

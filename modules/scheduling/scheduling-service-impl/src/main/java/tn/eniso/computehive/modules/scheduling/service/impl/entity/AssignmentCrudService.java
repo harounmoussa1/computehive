@@ -76,6 +76,11 @@ public class AssignmentCrudService {
     }
 
     @Transactional(readOnly = true)
+    public List<Assignment> findAllActive() {
+        return repository.findAllActive();
+    }
+
+    @Transactional(readOnly = true)
     public List<Assignment> findActiveByMachine(String machineId) {
         return repository.findActiveByMachine(machineId);
     }
