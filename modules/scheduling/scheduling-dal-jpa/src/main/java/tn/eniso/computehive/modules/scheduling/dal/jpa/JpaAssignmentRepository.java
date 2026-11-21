@@ -52,6 +52,11 @@ class JpaAssignmentRepository implements AssignmentRepository {
     }
 
     @Override
+    public List<Assignment> findAllActive() {
+        return repository.findByStatusIn(ACTIVE, BY_CREATION).stream().map(JpaAssignment::toDomain).toList();
+    }
+
+    @Override
     public List<Assignment> findActiveByMachine(String machineId) {
         return repository.findByMachineIdAndStatusIn(machineId, ACTIVE, BY_CREATION).stream()
                 .map(JpaAssignment::toDomain)

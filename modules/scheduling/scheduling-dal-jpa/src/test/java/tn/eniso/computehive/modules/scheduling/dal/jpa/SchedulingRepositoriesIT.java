@@ -61,7 +61,7 @@ class SchedulingRepositoriesIT {
     /** Tentative terminée (machine perdue), comme après une panne. */
     private static Assignment lost(String id, JobRef job, MachineRef machine, long attemptId) {
         Assignment assignment = attempt(id, job, machine, attemptId, T0);
-        assignment.confirmRunning();
+        assignment.confirmRunning(T0);
         assignment.lose("machine is DEAD", T0.plusSeconds(40));
         return assignment;
     }
@@ -100,7 +100,20 @@ class SchedulingRepositoriesIT {
         assertThat(assignments.findActiveByJob("j-7")).map(Assignment::getId).contains("a-2");
         assertThat(assignments.findByJob("j-7")).extracting(Assignment::getAttemptId).containsExactly(1L, 2L);
         assertThat(assignments.findActiveByMachine("m-12")).isEmpty();
+        assertThat(assignments.findAllActive()).extracting(Assignment::getId).containsExactly("a-2");
         assertThat(assignments.findByLaunchCommandId("cmd-a-2")).map(Assignment::getId).contains("a-2");
+    }
+
+    @Test
+    void theV2MigrationAddsTheRunningSinceColumn() {
+        Assignment running = attempt("a-1", JOB_7, PC_12, 1, T0);
+        running.confirmRunning(T0.plusSeconds(3));
+        assignments.save(running);
+
+        assertThat(assignments.findById("a-1").orElseThrow().getRunningSince()).isEqualTo(T0.plusSeconds(3));
+        assertThat(jdbc.queryForObject(
+                "select max(version) from scheduling.flyway_schema_history where success", String.class))
+                .isEqualTo("2");
     }
 
     @Test
@@ -143,7 +156,7 @@ class SchedulingRepositoriesIT {
         Assignment first = assignments.findById("a-1").orElseThrow();
         Assignment second = assignments.findById("a-1").orElseThrow();
 
-        first.confirmRunning();
+        first.confirmRunning(T0);
         assignments.save(first);
         second.reject("GPU busy", T0);
 

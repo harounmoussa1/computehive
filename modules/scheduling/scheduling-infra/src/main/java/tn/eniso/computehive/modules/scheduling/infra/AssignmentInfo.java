@@ -8,6 +8,8 @@ import java.time.Instant;
 /**
  * Vue immuable d'une tentative, renvoyée par la façade {@code SchedulingModule}.
  * L'entité {@link Assignment}, modifiable, ne sort jamais du module.
+ *
+ * @param runningSince date de confirmation par l'agent, {@code null} tant qu'elle n'est pas {@code RUNNING}
  */
 public record AssignmentInfo(
         String id,
@@ -16,6 +18,7 @@ public record AssignmentInfo(
         long attemptId,
         AssignmentStatus status,
         ResumePoint resumeFrom,
+        Instant runningSince,
         Instant createdAt,
         Instant endedAt,
         String endReason) {

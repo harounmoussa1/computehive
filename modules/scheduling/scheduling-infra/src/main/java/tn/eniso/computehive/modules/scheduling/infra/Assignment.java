@@ -32,6 +32,7 @@ public class Assignment {
     private String launchCommandId;
     private Instant launchSentAt;
     private int launchSendCount;
+    private Instant runningSince;
     private Instant createdAt;
     private Instant endedAt;
     private String endReason;
@@ -65,12 +66,21 @@ public class Assignment {
      *
      * @return {@code false} si elle était déjà {@code RUNNING}
      */
-    public boolean confirmRunning() {
+    public boolean confirmRunning(Instant now) {
         if (status == AssignmentStatus.RUNNING) {
             return false;
         }
         moveTo(AssignmentStatus.RUNNING);
+        runningSince = Checks.requireNonNull(now, "now");
         return true;
+    }
+
+    /**
+     * {@code true} si la tentative tourne depuis avant {@code cutoff} : l'agent a eu le temps de la déclarer
+     * dans ses heartbeats, son absence de la liste {@code running} signifie donc qu'il l'a perdue.
+     */
+    public boolean isRunningSince(Instant cutoff) {
+        return status == AssignmentStatus.RUNNING && runningSince != null && runningSince.isBefore(cutoff);
     }
 
     /** L'agent a refusé le {@code LaunchJob}. */
@@ -135,6 +145,7 @@ public class Assignment {
         copy.launchCommandId = launchCommandId;
         copy.launchSentAt = launchSentAt;
         copy.launchSendCount = launchSendCount;
+        copy.runningSince = runningSince;
         copy.createdAt = createdAt;
         copy.endedAt = endedAt;
         copy.endReason = endReason;
@@ -143,7 +154,8 @@ public class Assignment {
     }
 
     public AssignmentInfo toInfo() {
-        return new AssignmentInfo(id, job, machine, attemptId, status, resumeFrom, createdAt, endedAt, endReason);
+        return new AssignmentInfo(id, job, machine, attemptId, status, resumeFrom, runningSince, createdAt, endedAt,
+                endReason);
     }
 
     // Accesseurs : utilisés par la couche DAL pour lire et reconstruire l'entité.
@@ -218,6 +230,14 @@ public class Assignment {
 
     public void setLaunchSendCount(int launchSendCount) {
         this.launchSendCount = launchSendCount;
+    }
+
+    public Instant getRunningSince() {
+        return runningSince;
+    }
+
+    public void setRunningSince(Instant runningSince) {
+        this.runningSince = runningSince;
     }
 
     public Instant getCreatedAt() {
