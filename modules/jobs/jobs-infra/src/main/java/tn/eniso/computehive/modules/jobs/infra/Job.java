@@ -148,6 +148,18 @@ public class Job {
         return true;
     }
 
+    /** Applique un changement de statut demandé par {@code scheduling}, via la méthode qui lui correspond. */
+    public void apply(JobStatusUpdate update, Instant now) {
+        Checks.requireNonNull(update, "update");
+        switch (update.status()) {
+            case RUNNING -> start(update.machine(), now);
+            case REASSIGNED -> reassign();
+            case DONE -> complete(update.accuracy(), now);
+            case FAILED -> fail(update.failureReason(), now);
+            case PENDING, CANCELLED -> throw new IllegalStateException("rejected by JobStatusUpdate: " + update.status());
+        }
+    }
+
     /** Epoch du checkpoint officiel, {@code 0} s'il n'y en a pas. */
     public int lastCheckpointEpoch() {
         return lastCheckpoint == null ? 0 : lastCheckpoint.epoch();

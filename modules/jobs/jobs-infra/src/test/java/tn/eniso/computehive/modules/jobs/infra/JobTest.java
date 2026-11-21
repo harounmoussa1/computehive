@@ -174,6 +174,30 @@ class JobTest {
     }
 
     @Test
+    void statusUpdatesGoThroughTheSameRules() {
+        Job job = pendingJob();
+
+        job.apply(JobStatusUpdate.running(PC_12), T0);
+        assertThat(job.getMachine()).isEqualTo(PC_12);
+
+        job.apply(JobStatusUpdate.done(0.97), T0.plusSeconds(60));
+        assertThat(job.getStatus()).isEqualTo(JobStatus.DONE);
+        assertThat(job.getAccuracy()).isEqualTo(0.97);
+
+        assertThatThrownBy(() -> job.apply(JobStatusUpdate.failed("late"), T0))
+                .isInstanceOf(ConflictException.class);
+    }
+
+    @Test
+    void statusUpdatesAreValidated() {
+        assertThatThrownBy(() -> JobStatusUpdate.running(null)).isInstanceOf(ValidationException.class);
+        assertThatThrownBy(() -> new JobStatusUpdate(JobStatus.CANCELLED, null, null, null))
+                .isInstanceOf(ValidationException.class);
+        assertThatThrownBy(() -> new JobStatusUpdate(JobStatus.PENDING, null, null, null))
+                .isInstanceOf(ValidationException.class);
+    }
+
+    @Test
     void copyIsIndependent() {
         Job job = pendingJob();
         Job copy = job.copy();
