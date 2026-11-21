@@ -112,7 +112,7 @@ Schéma PostgreSQL `jobs`, table `job`, migrations Flyway dans
 
 ## À venir
 
-- Arrêt de l'agent quand un job `RUNNING` est annulé : `scheduling` réagira à l'annulation (étape 5).
+- Arrêt de l'agent quand un job `RUNNING` est annulé : aujourd'hui au prochain message de son agent (`scheduling`), immédiatement à l'étape 6.
 - Notification de fin de job via l'extension `notifications-api` (étape 6).
 - Seul le propriétaire pourra annuler son job, quand une authentification existera.
 - Conflit de version (`OptimisticLockingFailureException`) traduit en HTTP 409 par `core-ws-rest`.
