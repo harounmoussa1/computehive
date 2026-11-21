@@ -102,10 +102,13 @@ il génère son code depuis le même `worker.proto`.
 ### jobs
 - Entité `Job` : id, owner (`UserRef`), type (types prédéfinis uniquement, ex. `MNIST_TRAIN`),
   params (epochs, lr, batchSize), requirements (gpu, minGpuMemoryMb), status, machine (`MachineRef`),
-  progress, lastLoss, lastCheckpointEpoch, `@Version`.
-- Statuts : `PENDING`, `RUNNING`, `REASSIGNED`, `DONE`, `FAILED`, `CANCELLED`.
-- Facade `JobsModule` : submit, cancel, findById, findByQuery, updateStatus, updateProgress.
-- REST : `POST /api/jobs`, `DELETE /api/jobs/{id}`, `GET /api/jobs/{id}`, `GET /api/jobs?status=`.
+  progress, lastLoss, lastCheckpoint (epoch, clé, SHA-256), `@Version`.
+- Statuts : `PENDING`, `RUNNING`, `REASSIGNED`, `DONE`, `FAILED`, `CANCELLED` ; transitions dans
+  `JobStatus.canMoveTo`. `REASSIGNED` = machine perdue, en attente d'une autre machine.
+- Facade `JobsModule` : submit, cancel, findById, findByQuery, updateStatus (`JobStatusUpdate`),
+  updateProgress, recordCheckpoint. L'`attemptId` n'est pas dans `jobs` (il est dans `Assignment`).
+- REST : `POST /api/jobs`, `DELETE /api/jobs/{id}`, `GET /api/jobs/{id}`, `GET /api/jobs?status=&owner=`.
+  Identité simulée par les en-têtes `X-User-Id` / `X-User-Name` (pas d'authentification).
 
 ### machines
 - Entité `Machine` : id, name, gpuName, gpuMemoryTotalMb, gpuMemoryFreeMb, hasCuda,
@@ -114,11 +117,11 @@ il génère son code depuis le même `worker.proto`.
 - Détection de panne : tâche `@Scheduled` toutes les 10 s ; pas de heartbeat depuis 30 s → `DEAD`.
 
 ### scheduling (le cerveau)
-- Placement : jobs `PENDING` triés par priorité (quotas) puis date ; choisir un PC `ONLINE`
+- Placement : jobs `PENDING` et `REASSIGNED` triés par priorité (quotas) puis date ; choisir un PC `ONLINE`
   compatible (GPU, mémoire libre) ; créer une `Assignment` avec un `attemptId`.
 - Réattribution : passage d'une `Machine` à `DEAD` → événement `MachineDead` publié sur
   `messaging-broker-api` (un intercepteur `AFTER_UPDATE` seul ne marcherait pas en M/P) →
-  jobs remis en `PENDING`, tentative + 1, reprise depuis le dernier checkpoint.
+  jobs passés en `REASSIGNED`, tentative + 1, reprise depuis le dernier checkpoint.
 - **Fencing token** : tout message worker porte l'`attemptId`. Un message d'une tentative périmée
   est rejeté et le worker reçoit `StopJob`. Garantit l'absence de job en double.
 - `ws-grpc` : traduit les messages du stream en appels de la façade `SchedulingModule` uniquement
@@ -169,7 +172,7 @@ Le job simulé de secours affiche les mêmes lignes sans PyTorch.
 0. ✅ Squelette Pyramid complet : tous les modules, extensions, drivers et applications, avec leurs dépendances.
 1. ✅ Socle commun (POM parent, core, Enforcer/ArchUnit, CI, worker.proto).
 2. ✅ `machines` + détection de panne.
-3. `jobs`.
+3. ✅ `jobs`.
 4. Extension messagerie (driver mémoire, puis Kafka).
 5. `scheduling` + gateway gRPC + agent-simulator.
 6. Réattribution + fencing ; `quotas` ; notifications.
