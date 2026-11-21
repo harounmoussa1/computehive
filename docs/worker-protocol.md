@@ -97,10 +97,24 @@ extensions/
 
 ### Règle clé : `scheduling-ws-grpc` ne contient aucune logique métier
 
-Il reçoit un message, appelle **une façade**, et renvoie éventuellement un ordre.
+Il reçoit un message, appelle **la façade `SchedulingModule`** (et elle seule), et renvoie
+éventuellement un ordre. C'est `scheduling-service-impl` qui appelle ensuite `MachinesModule` et
+`JobsModule` : la couche WS ne dépend que de la façade de son propre module (Convergence Rule).
 
 | Message reçu de l'agent | Appel effectué par `scheduling-ws-grpc` |
 |---|---|
+| `Register` | `SchedulingModule.registerAgent(...)`, ouverture de la session, réponse `Registered`, puis `SchedulingModule.resynchronize(machineId, running)` |
+| `Heartbeat` | `SchedulingModule.heartbeat(...)` (bail prolongé et resynchronisation) |
+| `Progress` | `SchedulingModule.reportProgress(...)` (vérifie l'`attemptId`, puis appelle `JobsModule.updateProgress`) |
+| `CheckpointSaved` | `SchedulingModule.reportCheckpoint(...)` |
+| `Finished` | `SchedulingModule.reportFinished(...)` |
+| `CommandAck` | `SchedulingModule.acknowledge(...)` |
+
+Dans l'autre sens, quand `scheduling` décide de lancer ou d'arrêter un job, il passe par le port
+`AgentChannel` (déclaré dans `scheduling-service-api`). Son implémentation, `AgentSessionRegistry`
+(dans `scheduling-ws-grpc`), retrouve le stream ouvert de la bonne machine et y écrit l'ordre.
+
+---|---|
 | `Register` | `MachinesModule.register(...)` puis `SchedulingModule.resync(machineId, runningJobs)` |
 | `Heartbeat` | `MachinesModule.heartbeat(...)` puis `SchedulingModule.resync(...)` |
 | `Progress` | `SchedulingModule.reportProgress(...)` (vérifie l'`attemptId`, puis appelle `JobsModule.updateProgress`) |

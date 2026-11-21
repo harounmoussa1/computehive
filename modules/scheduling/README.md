@@ -41,7 +41,7 @@ Pour chaque job `PENDING` ou `REASSIGNED`, du plus ancien au plus récent :
 
 | Message | Effet |
 |---|---|
-| `Register` | inscription de la machine (`MachinesModule`), puis resynchronisation |
+| `Register` | inscription de la machine (`MachinesModule`) ; la porte ouvre la session, répond `Registered`, puis demande la resynchronisation (`resynchronize`) |
 | `Heartbeat` | prolongation du bail, puis resynchronisation |
 | `CommandAck` | accepté : tentative et job `RUNNING` ; refusé : tentative `REJECTED`, machine libérée, job replacé ailleurs |
 | `Progress` | avancement du job |
@@ -68,10 +68,27 @@ englobante** : chaque module écrit dans sa propre transaction, y compris en M/1
 l'état avant d'agir ; un message rejoué ne refait pas ce qui est déjà fait. Une machine n'est libérée
 que par l'appel qui a réellement terminé sa tentative.
 
-## Le canal vers les agents (`AgentChannel`)
+## La porte gRPC (`scheduling-ws-grpc`)
 
-`scheduling-service-api` déclare l'interface `AgentChannel` (envoyer un ordre à une machine connectée) ;
-la couche `ws-grpc` l'implémente. La couche service envoie donc des ordres sans dépendre de gRPC.
+`WorkerGatewayService` implémente `WorkerGateway.Connect`. L'agent ouvre le stream ; chaque message
+reçu est traduit (`ProtoTranslator`) en **un** appel de `SchedulingModule`, sans logique métier.
+
+- Le premier message doit être `Register` (sinon `FAILED_PRECONDITION`) ; un `Register` invalide est
+  refusé (`INVALID_ARGUMENT`).
+- Ordre à l'inscription : `registerAgent`, ouverture de la session, `Registered`, puis `resynchronize`,
+  pour que les `StopJob` de la resynchronisation trouvent la session ouverte.
+- Un message refusé par le module est journalisé ; le stream reste ouvert pour les suivants.
+- Un heartbeat d'une machine inconnue ferme le stream (`NOT_FOUND`) : l'agent se réinscrit.
+- **Un stream par machine** (`AgentSessionRegistry`) : une reconnexion remplace l'ancien stream,
+  fermé avec `ABORTED` (docs/worker-protocol.md §6.6).
+- Le `message_id` de l'agent sert de `correlationId` dans les logs, avec le `workerId`.
+
+Dans l'autre sens, `scheduling-service-api` déclare le port `AgentChannel` (envoyer un ordre à une
+machine connectée) ; `AgentSessionRegistry` l'implémente. La couche service envoie donc des ordres
+sans dépendre de gRPC (inversion de dépendance).
+
+`WorkerGatewayServer` démarre le serveur Netty avec l'application ; il envoie des pings sur un stream
+inactif pour détecter un agent disparu, et accepte ceux des agents.
 
 ## Configuration
 
@@ -84,6 +101,12 @@ computehive:
     launch-watchdog-interval: 5s
     processed-message-retention: 24h
     purge-interval: 1h
+  grpc:
+    port: 9090
+    keep-alive-time: 30s
+    keep-alive-timeout: 10s
+    permit-keep-alive-time: 10s
+    shutdown-grace-period: 5s
 ```
 
 ## Données
@@ -100,7 +123,7 @@ dans `scheduling-dal-jpa/src/main/resources/db/migration/scheduling` (voir ADR 0
 | `scheduling-dal-jpa` | entités JPA, adaptateurs, migrations |
 | `scheduling-service-api` | façade `SchedulingModule`, port `AgentChannel` |
 | `scheduling-service-impl` | services CRUD, `SchedulingModuleImpl`, `JobPlacement`, `LaunchWatchdog`, `Fencing`, `AttemptLifecycle` |
-| `scheduling-ws-grpc` | porte `WorkerGateway` (PR 5c) |
+| `scheduling-ws-grpc` | `WorkerGatewayService`, `ProtoTranslator`, `AgentSessionRegistry` (implémente `AgentChannel`), `WorkerGatewayServer` |
 | `scheduling-ws-rest`, `scheduling-service-rest-cli` | réservés au mode M/P (étape d'assemblage) |
 
 ## Tests
@@ -110,6 +133,8 @@ dans `scheduling-dal-jpa/src/main/resources/db/migration/scheduling` (voir ADR 0
 | `AssignmentTest` | statuts d'une tentative, renvoi, reprise |
 | `SchedulingRepositoriesIT` | migrations, garanties de la base contre les doublons, dédoublonnage atomique (PostgreSQL) |
 | `AssignmentCrudServiceTest` | intercepteurs autour de chaque écriture |
+| `WorkerGatewayServiceTest` | porte gRPC (serveur en mémoire, faux agent) : traduction, ordres, inscription, reconnexion, erreurs |
+| `WorkerGatewayServerTest` | vrai serveur Netty sur un port libre : connexion d'un agent par le réseau, arrêt propre |
 | `SchedulingScenariosTest` | 26 scénarios : placement, refus, accusé perdu, message rejoué, tentative périmée, reprise depuis un checkpoint, resynchronisation, annulation, renvoi puis abandon |
 
 ## À venir (étape 6)

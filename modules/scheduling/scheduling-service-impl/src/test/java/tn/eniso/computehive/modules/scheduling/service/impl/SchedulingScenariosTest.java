@@ -309,9 +309,9 @@ class SchedulingScenariosTest {
         String pc = f.connectGpuAgent("a1");
         JobInfo job = runningJobOn(pc);
 
-        f.scheduling.registerAgent(SchedulingFixture.gpuHello("a1", List.of(
-                new RunningAttempt(job.id(), 1),
-                new RunningAttempt("forgotten-job", 3))));
+        List<RunningAttempt> running = List.of(new RunningAttempt(job.id(), 1), new RunningAttempt("forgotten-job", 3));
+        String again = f.scheduling.registerAgent(SchedulingFixture.gpuHello("a1", running)).machineId();
+        f.scheduling.resynchronize(again, running);
 
         assertThat(f.agents.stops(pc)).singleElement().satisfies(stop -> {
             assertThat(stop.jobId()).isEqualTo("forgotten-job");
