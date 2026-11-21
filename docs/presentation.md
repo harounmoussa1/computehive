@@ -407,7 +407,7 @@ Un job simulé affiche les mêmes lignes sans PyTorch, pour les tests.
 | 1 | Socle : core, `worker.proto`, règles d'architecture, CI | ✅ |
 | 2 | Module `machines` : inscription, heartbeats, détection de panne | ✅ |
 | 3 | Module `jobs` : soumission, annulation, statuts, avancement, checkpoints, API REST | ✅ |
-| 4 | Messagerie (mémoire, puis Kafka) | ⏳ |
+| 4 | Messagerie : contrat, driver mémoire, driver Kafka ; publication de `MachineDead` | ✅ |
 | 5 | `scheduling` + porte gRPC + faux agent | ⏳ |
 | 6 | Réattribution, fencing, quotas, notifications | ⏳ |
 | 7 | **Jalon : serveur complet testé avec le faux agent** | ⏳ |
