@@ -3,6 +3,6 @@
  *
  * <p>Couche <b>dal-jpa</b> : implémentation JPA (Hibernate, PostgreSQL) des repositories de {@code dal-api}. Les tables appartiennent à ce module seul.</p>
  *
- * <p>Contenu prévu : entité JPA {@code JpaUsage}, adaptateur {@code UsageRepository}.</p>
+ * <p>Contenu : {@code JpaUsage} (table {@code quotas.usage}, {@code @Version}), {@code JpaUsageRepository} (adaptateur de {@code UsageRepository}), {@link tn.eniso.computehive.modules.quotas.dal.jpa.QuotasJpaConfiguration} (schéma et migrations Flyway {@code db/migration/quotas}).</p>
  */
 package tn.eniso.computehive.modules.quotas.dal.jpa;

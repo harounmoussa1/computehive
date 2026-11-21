@@ -17,6 +17,7 @@ import tn.eniso.computehive.modules.scheduling.service.impl.entity.AssignmentCru
 import tn.eniso.computehive.modules.scheduling.service.impl.entity.ProcessedAgentMessageCrudService;
 import tn.eniso.computehive.modules.scheduling.service.impl.support.FakeJobsModule;
 import tn.eniso.computehive.modules.scheduling.service.impl.support.FakeMachinesModule;
+import tn.eniso.computehive.modules.scheduling.service.impl.support.FakeQuotasModule;
 import tn.eniso.computehive.modules.scheduling.service.impl.support.InMemoryAssignmentRepository;
 import tn.eniso.computehive.modules.scheduling.service.impl.support.InMemoryProcessedAgentMessageRepository;
 import tn.eniso.computehive.modules.scheduling.service.impl.support.MutableClock;
@@ -45,7 +46,8 @@ class SchedulingFixture {
             new ProcessedAgentMessageCrudService(new InMemoryProcessedAgentMessageRepository());
     final AttemptLifecycle lifecycle = new AttemptLifecycle(assignments, jobs, machines, agents, clock);
     final Fencing fencing = new Fencing(assignments, lifecycle);
-    final JobPlacement placement = new JobPlacement(jobs, machines, assignments, agents, clock);
+    final FakeQuotasModule quotas = new FakeQuotasModule();
+    final JobPlacement placement = new JobPlacement(jobs, machines, assignments, agents, quotas, clock);
     final LaunchWatchdog watchdog = new LaunchWatchdog(assignments, jobs, agents, lifecycle, properties, clock);
     final Reassignment reassignment = new Reassignment(assignments, jobs, lifecycle, properties, clock);
     final Reconciler reconciler = new Reconciler(assignments, jobs, machines, lifecycle);
@@ -74,7 +76,11 @@ class SchedulingFixture {
     }
 
     JobInfo submitGpuJob() {
-        return jobs.submit(new JobSubmission(HAROUN, "mnist", JobType.MNIST_TRAIN, new JobParams(10, 0.01, 64),
+        return submitGpuJobOf(HAROUN);
+    }
+
+    JobInfo submitGpuJobOf(UserRef owner) {
+        return jobs.submit(new JobSubmission(owner, "mnist", JobType.MNIST_TRAIN, new JobParams(10, 0.01, 64),
                 JobRequirements.gpu(4_096)));
     }
 

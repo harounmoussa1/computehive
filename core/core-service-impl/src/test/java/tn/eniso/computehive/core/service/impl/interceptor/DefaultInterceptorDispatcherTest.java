@@ -2,6 +2,7 @@ package tn.eniso.computehive.core.service.impl.interceptor;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tn.eniso.computehive.core.service.api.interceptor.EntityInterceptor;
@@ -103,7 +104,7 @@ class DefaultInterceptorDispatcherTest {
     }
 
     private static DefaultInterceptorDispatcher dispatcherWith(EntityInterceptor<?>... interceptors) {
-        return new DefaultInterceptorDispatcher(new InterceptorRegistry(List.of(interceptors)));
+        return new DefaultInterceptorDispatcher(new InterceptorRegistry(List.of(interceptors)), (PlatformTransactionManager) null);
     }
 
     private <T> EntityInterceptor<T> recording(String name, Class<T> type, LifecyclePhase phase, int order) {

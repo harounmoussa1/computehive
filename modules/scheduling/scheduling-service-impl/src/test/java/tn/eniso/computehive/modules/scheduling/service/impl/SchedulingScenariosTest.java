@@ -3,6 +3,7 @@ package tn.eniso.computehive.modules.scheduling.service.impl;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import tn.eniso.computehive.core.infra.exception.ValidationException;
+import tn.eniso.computehive.core.infra.ref.UserRef;
 import tn.eniso.computehive.modules.jobs.infra.JobInfo;
 import tn.eniso.computehive.modules.jobs.infra.JobStatus;
 import tn.eniso.computehive.modules.jobs.infra.JobStatusUpdate;
@@ -111,6 +112,20 @@ class SchedulingScenariosTest {
 
         assertThat(f.agents.launches(pc)).singleElement().extracting(AgentCommand.LaunchJob::jobId)
                 .isEqualTo(first.id());
+    }
+
+    @Test
+    void aUserWhoConsumedLessIsServedBeforeAHeavyUserEvenIfTheyCameLater() {
+        String pc = f.connectGpuAgent("a1");
+        f.quotas.setPriority("u-heavy", 0.1);
+        JobInfo heavy = f.submitGpuJobOf(new UserRef("u-heavy", "Heavy", "MEMBER"));
+        f.clock.advance(Duration.ofMinutes(5));
+        JobInfo newcomer = f.submitGpuJobOf(new UserRef("u-new", "Newcomer", "MEMBER"));
+
+        f.placement.placeWaitingJobs();
+
+        assertThat(f.lastLaunch(pc).jobId()).isEqualTo(newcomer.id());
+        assertThat(f.jobs.get(heavy.id()).status()).as("waits for the next free machine").isEqualTo(JobStatus.PENDING);
     }
 
     // ───────────────────────── Accusé de réception ─────────────────────────

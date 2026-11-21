@@ -3,6 +3,6 @@
  *
  * <p>Couche <b>ws-rest</b> : contrôleurs REST. Ils traduisent HTTP en appels de la façade, sans logique métier.</p>
  *
- * <p>Contenu prévu : consultation des consommations pour le tableau de bord.</p>
+ * <p>Contenu : {@link tn.eniso.computehive.modules.quotas.ws.rest.QuotasController} ({@code GET /api/quotas}, {@code GET /api/quotas/{userId}}) pour le tableau de bord.</p>
  */
 package tn.eniso.computehive.modules.quotas.ws.rest;

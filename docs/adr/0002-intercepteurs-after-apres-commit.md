@@ -25,7 +25,27 @@ Si les `AFTER_*` s'exécutaient dans la transaction du module `jobs`, deux probl
 - ne lance donc aucun `AFTER_*` si la transaction est annulée ;
 - journalise l'échec d'un `AFTER_*` sans le propager, et poursuit avec les suivants.
 
+- exécute chaque `AFTER_*` dans **sa propre transaction** (`REQUIRES_NEW`, voir ci-dessous).
+
 Conséquence : un intercepteur `AFTER_*` doit être idempotent ou prévoir une compensation (saga).
+
+### Complément (2026-11-22) : une transaction neuve par intercepteur `AFTER_*`
+
+Pendant `afterCommit()`, Spring garde encore attachées les ressources de la transaction qui vient
+d'être validée. Un service appelé depuis un intercepteur, transactionnel avec la propagation par
+défaut (`REQUIRED`), rejoint cette transaction terminée au lieu d'en ouvrir une. Avec JPA, l'écriture
+échoue (`TransactionRequiredException: no transaction is in progress`) ; elle est perdue, et seul un
+log en garde la trace. C'est exactement le cas de `quotas`, qui enregistre la consommation GPU quand un
+job passe à `DONE`.
+
+`DefaultInterceptorDispatcher` exécute donc chaque `AFTER_*` dans une transaction neuve
+(`TransactionTemplate` en `REQUIRES_NEW`), quand l'application a un gestionnaire de transactions :
+
+- l'écriture de l'intercepteur est réellement validée ;
+- l'échec d'un intercepteur annule ses propres écritures, mais pas celles des suivants.
+
+`AfterInterceptorTransactionIT` (`core-service-impl`) montre le problème, puis sa correction, sur
+PostgreSQL avec Spring Data JPA et Hibernate.
 
 ## Alternatives écartées
 
