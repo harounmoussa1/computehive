@@ -3,6 +3,6 @@
  *
  * <p>Couche <b>dal-api</b> : interfaces des repositories. Chaque repository appartient à exactement un service CRUD du {@code service-impl}.</p>
  *
- * <p>Contenu prévu : {@code JobRepository}.</p>
+ * <p>Contenu : {@link tn.eniso.computehive.modules.jobs.dal.api.JobRepository}, utilisé uniquement par {@code JobCrudService}.</p>
  */
 package tn.eniso.computehive.modules.jobs.dal.api;
