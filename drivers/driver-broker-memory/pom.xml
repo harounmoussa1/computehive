@@ -11,7 +11,7 @@
 
     <artifactId>driver-broker-memory</artifactId>
     <name>ComputeHive :: Driver :: Broker Memory</name>
-    <description>Broker en mémoire, synchrone : tests et mode M/1.</description>
+    <description>Broker en mémoire, asynchrone (un fil de livraison) : tests et mode M/1.</description>
 
     <properties>
         <pyramid.banned.1>tn.eniso.computehive:driver-*</pyramid.banned.1>
@@ -25,6 +25,20 @@
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>messaging-broker-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>
