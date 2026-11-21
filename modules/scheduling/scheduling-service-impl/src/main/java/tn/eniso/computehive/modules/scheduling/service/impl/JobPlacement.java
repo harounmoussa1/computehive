@@ -13,6 +13,7 @@ import tn.eniso.computehive.modules.jobs.service.api.JobsModule;
 import tn.eniso.computehive.modules.machines.infra.MachineInfo;
 import tn.eniso.computehive.modules.machines.infra.MachineRequirements;
 import tn.eniso.computehive.modules.machines.service.api.MachinesModule;
+import tn.eniso.computehive.modules.quotas.service.api.QuotasModule;
 import tn.eniso.computehive.modules.scheduling.infra.Assignment;
 import tn.eniso.computehive.modules.scheduling.infra.AssignmentStatus;
 import tn.eniso.computehive.modules.scheduling.service.api.AgentChannel;
@@ -20,7 +21,9 @@ import tn.eniso.computehive.modules.scheduling.service.impl.entity.AssignmentCru
 
 import java.time.Clock;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -31,7 +34,8 @@ import java.util.stream.Stream;
  * Placement des jobs en attente ({@code PENDING} et {@code REASSIGNED}), lancé périodiquement par
  * {@link SchedulingConfiguration}.
  *
- * <p>Pour chaque job, du plus ancien au plus récent :</p>
+ * <p>Pour chaque job, par priorité de son propriétaire (module quotas : qui a le moins consommé passe d'abord),
+ * puis du plus ancien au plus récent :</p>
  * <ol>
  *   <li>ignorer le job s'il a déjà une tentative active ({@code LaunchJob} en attente de réponse) ;</li>
  *   <li>choisir une machine {@code ONLINE}, compatible, <b>connectée</b>, et qui n'a pas déjà refusé ce job ;</li>
@@ -40,29 +44,26 @@ import java.util.stream.Stream;
  *       si c'est impossible, <b>compensation</b> : la machine est libérée ;</li>
  *   <li>envoyer {@code LaunchJob}. Le job reste en attente jusqu'au {@code CommandAck} de l'agent.</li>
  * </ol>
- *
- * <p>Priorité : premier arrivé, premier servi. La priorité par quotas d'utilisation viendra avec le module quotas.</p>
  */
 @Component
 public class JobPlacement {
 
     private static final Logger log = LoggerFactory.getLogger(JobPlacement.class);
 
-    private static final Comparator<JobInfo> OLDEST_FIRST =
-            Comparator.comparing(JobInfo::submittedAt).thenComparing(JobInfo::id);
-
     private final JobsModule jobs;
     private final MachinesModule machines;
     private final AssignmentCrudService assignments;
     private final AgentChannel agents;
+    private final QuotasModule quotas;
     private final Clock clock;
 
     public JobPlacement(JobsModule jobs, MachinesModule machines, AssignmentCrudService assignments,
-                        AgentChannel agents, Clock clock) {
+                        AgentChannel agents, QuotasModule quotas, Clock clock) {
         this.jobs = jobs;
         this.machines = machines;
         this.assignments = assignments;
         this.agents = agents;
+        this.quotas = quotas;
         this.clock = clock;
     }
 
@@ -71,7 +72,7 @@ public class JobPlacement {
         List<JobInfo> waiting = Stream.concat(
                         jobs.findByQuery(JobQuery.byStatus(JobStatus.PENDING)).stream(),
                         jobs.findByQuery(JobQuery.byStatus(JobStatus.REASSIGNED)).stream())
-                .sorted(OLDEST_FIRST)
+                .sorted(placementOrder())
                 .toList();
         int launched = 0;
         for (JobInfo job : waiting) {
@@ -134,6 +135,17 @@ public class JobPlacement {
                 assignment.getAttemptId(), assignment.getResumeFrom().epoch(),
                 sent ? "" : " ; agent disconnected, LaunchJob will be resent");
         return true;
+    }
+
+    /**
+     * Priorité du propriétaire la plus haute d'abord, puis le plus ancien. La priorité n'est demandée qu'une fois
+     * par utilisateur et par passe.
+     */
+    private Comparator<JobInfo> placementOrder() {
+        Map<String, Double> priorities = new HashMap<>();
+        Comparator<JobInfo> byPriority = Comparator.comparingDouble(
+                job -> priorities.computeIfAbsent(job.owner().id(), quotas::priorityOf));
+        return byPriority.reversed().thenComparing(JobInfo::submittedAt).thenComparing(JobInfo::id);
     }
 
     private Set<String> machinesThatRefused(String jobId) {
