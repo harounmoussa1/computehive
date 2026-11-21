@@ -27,7 +27,8 @@ LAUNCHING ──► RUNNING ──► COMPLETED | FAILED | STOPPED | LOST
 
 ## Placement (`JobPlacement`, toutes les 2 s)
 
-Pour chaque job `PENDING` ou `REASSIGNED`, du plus ancien au plus récent :
+Pour chaque job `PENDING` ou `REASSIGNED`, par **priorité de son propriétaire** (`QuotasModule.priorityOf` :
+qui a le moins consommé passe d'abord), puis du plus ancien au plus récent :
 
 1. ignoré s'il a déjà une tentative active (`LaunchJob` en attente de réponse) ;
 2. machine `ONLINE`, compatible, **connectée**, et qui n'a pas déjà refusé ce job ;
@@ -155,9 +156,8 @@ dans `scheduling-dal-jpa/src/main/resources/db/migration/scheduling` (voir ADR 0
 | `WorkerGatewayServiceTest` | porte gRPC (serveur en mémoire, faux agent) : traduction, ordres, inscription, reconnexion, erreurs |
 | `WorkerGatewayServerTest` | vrai serveur Netty sur un port libre : connexion d'un agent par le réseau, arrêt propre |
 | `ReassignmentScenariosTest` | 13 scénarios : panne de machine et reprise depuis le checkpoint, ancienne machine écartée par le fencing, job disparu, annulation, réconciliation après un événement perdu, abonnements |
-| `SchedulingScenariosTest` | 26 scénarios : placement, refus, accusé perdu, message rejoué, tentative périmée, reprise depuis un checkpoint, resynchronisation, annulation, renvoi puis abandon |
+| `SchedulingScenariosTest` | 27 scénarios : placement (dont la priorité par quotas), refus, accusé perdu, message rejoué, tentative périmée, reprise depuis un checkpoint, resynchronisation, annulation, renvoi puis abandon |
 
 ## À venir
 
-- Priorité de placement par quotas d'utilisation (aujourd'hui : premier arrivé, premier servi).
 - Vérification du SHA-256 d'un checkpoint auprès de l'extension `checkpoint-storage` (étape 8).
