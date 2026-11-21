@@ -76,11 +76,14 @@ public class SchedulingModuleImpl implements SchedulingModule {
     public AgentRegistered registerAgent(AgentHello hello) {
         Checks.requireNonNull(hello, "hello");
         MachineInfo machine = machines.register(toRegistration(hello));
-        return LogContext.with(LogKeys.WORKER_ID, machine.id(), () -> {
-            resync(machine.id(), hello.running());
-            LeasePolicy lease = machines.leasePolicy();
-            return new AgentRegistered(machine.id(), lease.heartbeatInterval(), lease.leaseTtl());
-        });
+        LeasePolicy lease = machines.leasePolicy();
+        return new AgentRegistered(machine.id(), lease.heartbeatInterval(), lease.leaseTtl());
+    }
+
+    @Override
+    public void resynchronize(String machineId, List<RunningAttempt> running) {
+        Checks.requireNonNull(running, "running");
+        LogContext.with(LogKeys.WORKER_ID, machineId, () -> resync(machineId, running));
     }
 
     @Override

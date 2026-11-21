@@ -9,6 +9,7 @@ import tn.eniso.computehive.modules.scheduling.infra.agent.CommandAckReport;
 import tn.eniso.computehive.modules.scheduling.infra.agent.FinishedReport;
 import tn.eniso.computehive.modules.scheduling.infra.agent.MessageOutcome;
 import tn.eniso.computehive.modules.scheduling.infra.agent.ProgressReport;
+import tn.eniso.computehive.modules.scheduling.infra.agent.RunningAttempt;
 
 import java.util.List;
 import java.util.Optional;
@@ -29,10 +30,17 @@ import java.util.Optional;
 public interface SchedulingModule {
 
     /**
-     * Inscrit (ou réinscrit) la machine d'un agent qui vient d'ouvrir son stream, puis arrête les
-     * jobs périmés qu'il déclare faire tourner.
+     * Inscrit (ou réinscrit) la machine d'un agent qui vient d'ouvrir son stream. L'appelant ouvre
+     * ensuite la session de cette machine, puis appelle {@link #resynchronize} avec les jobs déclarés
+     * dans {@code hello} : les {@code StopJob} éventuels peuvent alors lui parvenir.
      */
     AgentRegistered registerAgent(AgentHello hello);
+
+    /**
+     * Resynchronisation : l'agent déclare les jobs qu'il fait tourner. Une tentative active pas encore
+     * confirmée l'est (CommandAck perdu) ; toute autre est périmée et reçoit {@code StopJob(STALE_ATTEMPT)}.
+     */
+    void resynchronize(String machineId, List<RunningAttempt> running);
 
     /** Prolonge le bail de la machine, puis arrête les jobs périmés qu'elle déclare faire tourner. */
     MessageOutcome heartbeat(String machineId, AgentHeartbeat heartbeat);
