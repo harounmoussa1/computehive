@@ -66,6 +66,7 @@ Tous les sous-projets ne sont pas obligatoires ; un sous-projet vide peut servir
 computehive/
 ├── pom.xml                    parent : versions, Enforcer, plugins
 ├── core/                      core-infra (références étendues, exceptions, LogKeys),
+│                              core-dal-jpa (schéma + migrations Flyway par module),
 │                              core-service-api (contrat des intercepteurs), core-service-impl
 │                              (distributeur), core-ws-rest (filtre de corrélation, erreurs HTTP)
 ├── contracts/worker-proto/    worker.proto + code gRPC généré
@@ -167,7 +168,7 @@ Le job simulé de secours affiche les mêmes lignes sans PyTorch.
 
 0. ✅ Squelette Pyramid complet : tous les modules, extensions, drivers et applications, avec leurs dépendances.
 1. ✅ Socle commun (POM parent, core, Enforcer/ArchUnit, CI, worker.proto).
-2. `machines` + détection de panne.
+2. ✅ `machines` + détection de panne.
 3. `jobs`.
 4. Extension messagerie (driver mémoire, puis Kafka).
 5. `scheduling` + gateway gRPC + agent-simulator.
@@ -187,6 +188,12 @@ Le job simulé de secours affiche les mêmes lignes sans PyTorch.
 - Tout nouveau sous-projet est ajouté en dépendance `test` de `tests/architecture-tests`.
 - Seuls les `*CrudService` utilisent un repository et appellent `InterceptorDispatcher`.
 - Les intercepteurs `AFTER_*` s'exécutent après le commit (ADR 0002).
+- Données : un schéma PostgreSQL par module, migrations Flyway dans `db/migration/<module>`,
+  `ddl-auto=validate` (ADR 0005). Entité JPA (`JpaXxx`, package-private) séparée de l'entité du domaine.
+- La façade renvoie des vues immuables (`XxxInfo`) ; l'entité du domaine ne sort pas du module.
+- Le temps vient du bean `Clock` (`core-service-impl`), jamais de `Instant.now()`.
+- Tests : `*Test` (unitaires, surefire) ; `*IT` (Testcontainers, failsafe, ignorés sans Docker).
+- Chaque module a un `README.md` (définition de terminé).
 
 ## Conventions de travail
 

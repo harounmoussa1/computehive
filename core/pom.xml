@@ -16,6 +16,7 @@
 
     <modules>
         <module>core-infra</module>
+        <module>core-dal-jpa</module>
         <module>core-service-api</module>
         <module>core-service-impl</module>
         <module>core-ws-rest</module>

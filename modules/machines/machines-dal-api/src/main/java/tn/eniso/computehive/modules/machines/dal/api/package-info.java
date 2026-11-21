@@ -3,6 +3,6 @@
  *
  * <p>Couche <b>dal-api</b> : interfaces des repositories. Chaque repository appartient à exactement un service CRUD du {@code service-impl}.</p>
  *
- * <p>Contenu prévu : {@code MachineRepository}.</p>
+ * <p>Contenu : {@code MachineRepository}.</p>
  */
 package tn.eniso.computehive.modules.machines.dal.api;

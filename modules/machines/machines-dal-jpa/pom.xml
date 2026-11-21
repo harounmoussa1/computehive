@@ -11,7 +11,7 @@
 
     <artifactId>machines-dal-jpa</artifactId>
     <name>ComputeHive :: Machines :: DAL JPA</name>
-    <description>Machines : couche dal-jpa</description>
+    <description>Machines : couche dal-jpa (schéma PostgreSQL "machines")</description>
 
     <properties>
         <pyramid.banned.1>tn.eniso.computehive:*-service-*</pyramid.banned.1>
@@ -23,6 +23,36 @@
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>machines-dal-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>core-dal-jpa</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>
