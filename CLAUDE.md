@@ -173,7 +173,7 @@ Le job simulé de secours affiche les mêmes lignes sans PyTorch.
 1. ✅ Socle commun (POM parent, core, Enforcer/ArchUnit, CI, worker.proto).
 2. ✅ `machines` + détection de panne.
 3. ✅ `jobs`.
-4. Extension messagerie (driver mémoire, puis Kafka).
+4. ✅ Extension messagerie (driver mémoire, puis Kafka) ; `machines` publie `MachineDead` (ADR 0006).
 5. `scheduling` + gateway gRPC + agent-simulator.
 6. Réattribution + fencing ; `quotas` ; notifications.
 7. **Jalon : serveur complet, testé avec le faux agent.**
@@ -191,6 +191,9 @@ Le job simulé de secours affiche les mêmes lignes sans PyTorch.
 - Tout nouveau sous-projet est ajouté en dépendance `test` de `tests/architecture-tests`.
 - Seuls les `*CrudService` utilisent un repository et appellent `InterceptorDispatcher`.
 - Les intercepteurs `AFTER_*` s'exécutent après le commit (ADR 0002).
+- Événements entre modules (ADR 0006) : le topic (`Topic<E>`) est déclaré par le module émetteur dans
+  son `service-api` (ex. `MachinesEvents`), publié depuis un intercepteur `AFTER_*` ; livraison
+  asynchrone et « au moins une fois », donc tout abonné est idempotent (`eventId`).
 - Données : un schéma PostgreSQL par module, migrations Flyway dans `db/migration/<module>`,
   `ddl-auto=validate` (ADR 0005). Entité JPA (`JpaXxx`, package-private) séparée de l'entité du domaine.
 - La façade renvoie des vues immuables (`XxxInfo`) ; l'entité du domaine ne sort pas du module.
