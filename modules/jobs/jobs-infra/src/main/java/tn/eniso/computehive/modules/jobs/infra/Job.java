@@ -20,6 +20,9 @@ import java.time.Instant;
  */
 public class Job {
 
+    /** Longueur maximale conservée du message d'erreur d'un job en échec. */
+    public static final int MAX_FAILURE_REASON_LENGTH = 1000;
+
     private String id;
     private String name;
     private JobType type;
@@ -117,10 +120,15 @@ public class Job {
         finishedAt = now;
     }
 
-    /** Échec définitif : {@code RUNNING} ou {@code REASSIGNED → FAILED}. */
+    /**
+     * Échec définitif : {@code RUNNING} ou {@code REASSIGNED → FAILED}. Le message d'erreur,
+     * rapporté par l'agent, est tronqué à {@link #MAX_FAILURE_REASON_LENGTH} caractères.
+     */
     public void fail(String reason, Instant now) {
         moveTo(JobStatus.FAILED);
-        failureReason = reason;
+        failureReason = reason == null || reason.length() <= MAX_FAILURE_REASON_LENGTH
+                ? reason
+                : reason.substring(0, MAX_FAILURE_REASON_LENGTH);
         finishedAt = now;
     }
 

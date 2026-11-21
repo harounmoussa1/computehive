@@ -152,6 +152,15 @@ class JobTest {
     }
 
     @Test
+    void aVeryLongFailureReasonIsTruncated() {
+        Job job = runningJob();
+
+        job.fail("x".repeat(5_000), T0);
+
+        assertThat(job.getFailureReason()).hasSize(Job.MAX_FAILURE_REASON_LENGTH);
+    }
+
+    @Test
     void cancelIsIdempotentButAFinishedJobCannotBeCancelled() {
         Job running = runningJob();
         assertThat(running.cancel(T0.plusSeconds(30))).isTrue();
