@@ -91,7 +91,7 @@ BODY = r"""
     <tr><td><b>Serveur</b></td><td>Haroun — core, modules, extensions, drivers, porte gRPC, assemblages M/1 et M/P</td></tr>
     <tr><td><b>Agent</b></td><td>le binôme — agent Rust, scripts Python, essais multi-PC</td></tr>
     <tr><td><b>Architecture</b></td><td>The Pyramid Architecture (whitepaper de Taha Ben Salah)</td></tr>
-    <tr><td><b>État</b></td><td>étapes 0 à 7 terminées ; étape 8 : checkpoints, jetons et M/P terminés, tableau de bord à venir</td></tr>
+    <tr><td><b>État</b></td><td>étapes 0 à 8 terminées (dont M/P et tableau de bord) ; étape 9 : intégration avec l'agent réel</td></tr>
     <tr><td><b>Date</b></td><td>22 novembre 2026</td></tr>
   </table>
 </section>
@@ -303,10 +303,11 @@ docker compose --profile demo up --build -d   # serveur + deux faux PC GPU
 docker compose logs -f app-main app-scheduling</pre>
 <h3>Démo de la panne devant le jury</h3>
 <ol>
-<li>Soumettre un job de 40 epochs : <code>POST http://HOTE:8080/api/jobs</code>.</li>
-<li>Regarder sur quel PC il tourne : <code>GET /api/jobs/{id}</code> (champ <code>machine</code>).</li>
+<li>Ouvrir le tableau de bord <code>http://HOTE:8080/</code> et soumettre un job de 40 epochs (« Nouveau job »).</li>
+<li>Cliquer sur sa ligne : le panneau montre sur quel PC il tourne.</li>
 <li>Tuer ce PC : <code>docker compose kill agent-a</code>.</li>
-<li>Environ 30 s plus tard, le PC passe <code>DEAD</code> et le job reprend sur <code>agent-b</code> depuis l'epoch du dernier checkpoint.</li>
+<li>Environ 30 s plus tard, le PC passe « Hors ligne » et le job reprend sur <code>agent-b</code> : le panneau montre la
+tentative 1 « Perdue » et la tentative 2 « reprise depuis le checkpoint de l'epoch N ».</li>
 <li>Voir l'e-mail sur <code>http://HOTE:8025</code> et la consommation sur <code>GET /api/quotas/{userId}</code>.</li>
 </ol>
 <div class="box ok"><b>Vérifié pour de vrai.</b> Lors du test de l'assemblage M/P, un job de 40 epochs a perdu son PC à l'epoch 6.

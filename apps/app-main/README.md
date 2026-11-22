@@ -15,6 +15,7 @@ Il tient dans `MainApplication` et dans le `pom.xml` :
 | Checkpoints des agents | — | API REST + stockage distant simulé | API REST + disque local |
 | Messagerie | Kafka | Kafka | mémoire |
 | Notifications | e-mail (Mailpit) | — | logs |
+| Tableau de bord | page + `dashboard` (tentatives lues par le proxy de scheduling) | — | page + `dashboard` |
 | Base | schémas `jobs`, `machines`, `quotas` | schéma `scheduling` | les quatre |
 
 Le Maven Enforcer refuse un mauvais assemblage, par exemple `scheduling-service-impl` ou le broker en
@@ -46,7 +47,7 @@ mémoire ici.
 
 | Adresse | Pour qui |
 |---|---|
-| `http://HOTE:8080` | utilisateurs : `/api/jobs`, `/api/machines`, `/api/quotas` |
+| `http://HOTE:8080/` | **tableau de bord** (page web) et API des utilisateurs : `/api/jobs`, `/api/machines`, `/api/quotas`, `/api/dashboard` |
 | `HOTE:9090` (gRPC) et `http://HOTE:8081` (checkpoints) | agents des PC du laboratoire |
 | `http://HOTE:8025` | Mailpit : les e-mails envoyés aux utilisateurs |
 | `localhost:5434` | PostgreSQL, pour pgAdmin (utilisateur et base `computehive`) |
@@ -59,16 +60,17 @@ docker compose logs -f app-main app-scheduling
 
 ### Démo : la panne d'un PC
 
-Soumettre un job assez long (par exemple 40 epochs), regarder sur quel PC il tourne, puis tuer ce PC :
+Ouvrir le tableau de bord (`http://HOTE:8080/`), soumettre un job assez long (par exemple 40 epochs) avec
+« Nouveau job », cliquer sur sa ligne pour voir sur quel PC il tourne, puis tuer ce PC :
 
 ```powershell
 docker compose kill agent-a
 ```
 
 Environ 30 secondes plus tard (durée du bail), `app-main` déclare le PC mort et publie `MachineDead` sur Kafka.
-`app-scheduling` réattribue alors le job, qui reprend sur `agent-b` depuis son dernier checkpoint. Les tentatives
-du job se lisent sur l'API interne d'`app-scheduling`, avec le jeton interne :
-`GET http://HOTE:8081/internal/scheduling/jobs/{id}/attempts`.
+`app-scheduling` réattribue alors le job, qui reprend sur `agent-b` depuis son dernier checkpoint. Le panneau du
+job sur le tableau de bord montre les deux tentatives : la première `Perdue`, la seconde « reprise depuis le
+checkpoint de l'epoch N ».
 
 Arrêter : `docker compose --profile demo down`. Ajouter `-v` pour effacer aussi la base et Kafka.
 

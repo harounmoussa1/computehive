@@ -197,7 +197,7 @@ Et `agent-simulator` : un **faux agent** pour tester tout le serveur sans GPU ni
 computehive/
 ├── core/                 outils communs (références, erreurs, intercepteurs, logs, migrations)
 ├── contracts/            worker.proto (contrat avec l'agent)
-├── modules/              jobs, machines, scheduling, quotas (chacun en pyramide)
+├── modules/              jobs, machines, scheduling, quotas (chacun en pyramide), dashboard
 ├── extensions/           contrats techniques
 ├── drivers/              implémentations des contrats
 ├── apps/                 assemblages M/1 et M/P
@@ -411,7 +411,7 @@ Un job simulé affiche les mêmes lignes sans PyTorch, pour les tests.
 | 5 | `scheduling` (placement, fencing, messages des agents) + porte gRPC + faux agent | ✅ |
 | 6 | Réattribution depuis le checkpoint, réconciliation, quotas et priorité, notifications (logs, e-mail Mailpit) | ✅ |
 | 7 | **Jalon : serveur complet testé avec le faux agent** (`app-modulith`, test de bout en bout avec panne et reprise) | ✅ |
-| 8 | Checkpoints + Resilience4j ✅, jeton des agents ✅, M/P (`app-main` + `app-scheduling`, REST interne, Kafka, Docker Compose) ✅, tableau de bord | ⏳ |
+| 8 | Checkpoints + Resilience4j, jeton des agents, M/P (`app-main` + `app-scheduling`, REST interne, Kafka, Docker Compose), tableau de bord en direct | ✅ |
 | 9 | Intégration avec l'agent réel, tests de bout en bout | ⏳ |
 
 ### Agent
