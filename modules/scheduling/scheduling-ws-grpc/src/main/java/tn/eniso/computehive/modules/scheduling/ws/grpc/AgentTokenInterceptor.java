@@ -28,8 +28,13 @@ public class AgentTokenInterceptor implements ServerInterceptor {
 
     private final AgentToken token;
 
+    /** Sans jeton configuré, tout agent est accepté : à réserver au développement, d'où l'avertissement. */
     public AgentTokenInterceptor(AgentToken token) {
         this.token = token;
+        if (!token.enabled()) {
+            log.warn("Agent authentication is DISABLED: any program can register as an agent. "
+                    + "Set computehive.agents.token (COMPUTEHIVE_AGENTS_TOKEN) outside development.");
+        }
     }
 
     @Override
