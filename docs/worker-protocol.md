@@ -368,6 +368,23 @@ ferait compter deux fois le temps GPU dans le module `quotas`.
 Si un agent ouvre un nouveau stream alors que l'ancien n'est pas encore fermé côté serveur
 (reconnexion rapide), **le nouveau remplace l'ancien** dans `AgentSessionRegistry` et l'ancien est fermé.
 
+### 6.7 Authentification des agents (jeton partagé, v1)
+
+Un secret commun à tous les PC du labo, réglé sur le serveur par `COMPUTEHIVE_AGENTS_TOKEN`
+(`computehive.agents.token`). **L'agent doit le présenter partout** :
+
+| Canal | Où mettre le jeton | Sans le bon jeton |
+|---|---|---|
+| stream gRPC `WorkerGateway.Connect` | metadata `authorization: Bearer <jeton>` à l'ouverture du stream | stream refusé, `UNAUTHENTICATED`, avant même `Register` |
+| `PUT` / `GET /api/checkpoints/...` | en-tête HTTP `Authorization: Bearer <jeton>` | `401 Unauthorized` |
+
+- `worker.proto` ne change pas : le jeton voyage dans les en-têtes, pas dans les messages.
+- Le serveur compare à temps constant. Sans jeton configuré, il accepte tout agent et l'écrit dans
+  ses logs au démarrage (développement uniquement).
+- Côté agent : lire le jeton dans sa configuration ou dans la variable `COMPUTEHIVE_AGENTS_TOKEN`, ne
+  jamais l'écrire dans les logs ; sur `UNAUTHENTICATED`, ne pas se reconnecter en boucle rapide.
+- Limite : sans TLS, le jeton circule en clair ; il protège le réseau fermé du labo, pas Internet (voir §9).
+
 ---
 
 ## 7. Séquences principales
@@ -439,7 +456,7 @@ Ces fonctionnalités du README-AGENT sont intéressantes mais **repoussées en v
 pour tenir les délais du projet de module :
 
 - partage selon l'inactivité du propriétaire, horaires, préemption, assistant de session Windows ;
-- mTLS et enrôlement par jeton (v1 : réseau du labo ; un jeton partagé simple suffit) ;
+- TLS / mTLS et un jeton propre à chaque agent, révocable (v1 : jeton partagé, §6.7) ;
 - mise à jour automatique de l'agent, déploiement canary, paquets `.deb` / `.rpm` / `.msi` ;
 - classement des machines par niveau avec benchmark ;
 - envoi des logs et des métriques détaillées (`LogChunk`, `MetricBatch`) ;

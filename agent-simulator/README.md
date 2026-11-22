@@ -16,6 +16,7 @@ java -jar agent-simulator/target/agent-simulator.jar --server=localhost:9090 --c
 | `--server=HOTE:PORT` | serveur gRPC | `localhost:9090` |
 | `--storage-url=URL` | API REST de dépôt des checkpoints | `http://HOTE:8080` |
 | `--no-storage` | ne déposer aucun fichier (annonce seule) | non |
+| `--token=JETON` | jeton partagé des agents (metadata gRPC et en-tête HTTP `Authorization: Bearer`) | variable `COMPUTEHIVE_AGENTS_TOKEN` |
 | `--count=N` | nombre de PC simulés | 1 |
 | `--agent-id=PREFIXE` | identifiants `PREFIXE-1`, `PREFIXE-2`… | `sim` |
 | `--cpu` | workers CPU, sans GPU | GPU |

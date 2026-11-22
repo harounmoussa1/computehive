@@ -43,6 +43,23 @@ Il tient dans `ModulithApplication` et dans le `pom.xml` :
 | `DB_USER`, `DB_PASSWORD` | `computehive`, `computehive` (développement uniquement) |
 | `HTTP_PORT`, `GRPC_PORT` | `8080`, `9090` |
 | `CHECKPOINT_DIR` | `data/checkpoints` |
+| `COMPUTEHIVE_AGENTS_TOKEN` | vide : tout agent est accepté (développement) ; à fixer dès qu'on sort d'un seul PC |
+
+## Agents sur d'autres PC du labo
+
+Les agents se connectent au serveur (jamais l'inverse) : seuls les ports 9090 et 8080 du **PC serveur**
+doivent être ouverts dans son pare-feu. Démarrer le serveur avec un jeton partagé, et donner le même aux agents :
+
+```bash
+COMPUTEHIVE_AGENTS_TOKEN=un-secret-du-labo DB_PORT=5433 java -jar apps/app-modulith/target/app-modulith.jar
+```
+
+```bash
+java -jar agent-simulator/target/agent-simulator.jar --server=IP_DU_SERVEUR:9090 --token=un-secret-du-labo
+```
+
+Sans le bon jeton, le stream gRPC est refusé (`UNAUTHENTICATED`) et l'API des checkpoints répond 401
+(docs/worker-protocol.md §6.7, ADR 0009).
 
 ## Démo : un PC tombe en panne, le job reprend ailleurs
 
