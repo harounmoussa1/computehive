@@ -17,6 +17,7 @@ import tn.eniso.computehive.core.infra.exception.ConflictException;
 import tn.eniso.computehive.core.infra.exception.NotFoundException;
 import tn.eniso.computehive.core.infra.exception.ValidationException;
 import tn.eniso.computehive.core.infra.log.LogKeys;
+import tn.eniso.computehive.core.infra.security.InternalToken;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -52,6 +53,11 @@ class CoreWsRestTest {
         @GetMapping("/probe/header")
         String header(@RequestHeader("X-User-Id") String userId) {
             return userId;
+        }
+
+        @GetMapping("/internal/probe")
+        String internal() {
+            return "internal ok";
         }
 
         @GetMapping("/probe/number")
@@ -128,6 +134,32 @@ class CoreWsRestTest {
     @Test
     void standardHttpErrorsKeepTheirStatus() throws Exception {
         mvc.perform(delete("/probe/ok")).andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
+    void internalEndpointsRequireTheInternalTokenAndPublicOnesDoNot() throws Exception {
+        MockMvc protectedApp = MockMvcBuilders.standaloneSetup(new ProbeController())
+                .addFilters(new InternalApiFilter(InternalToken.of("between-apps")))
+                .build();
+
+        protectedApp.perform(get("/internal/probe")).andExpect(status().isUnauthorized());
+        protectedApp.perform(get("/internal/probe").header("Authorization", "Bearer wrong"))
+                .andExpect(status().isUnauthorized());
+        protectedApp.perform(get("/internal/probe").header("Authorization", "Bearer between-apps"))
+                .andExpect(status().isOk());
+        protectedApp.perform(get("/probe/ok")).andExpect(status().isOk());
+    }
+
+    @Test
+    void withoutInternalTokenTheInternalApiIsClosed() throws Exception {
+        MockMvc unconfigured = MockMvcBuilders.standaloneSetup(new ProbeController())
+                .addFilters(new InternalApiFilter(InternalToken.disabled()))
+                .build();
+
+        unconfigured.perform(get("/internal/probe").header("Authorization", "Bearer anything"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.detail").value(containsString("internal API disabled")));
+        unconfigured.perform(get("/probe/ok")).andExpect(status().isOk());
     }
 
     @Test

@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import tn.eniso.computehive.core.infra.security.AgentToken;
+import tn.eniso.computehive.core.infra.security.InternalToken;
 
 import java.time.Clock;
 
@@ -37,5 +38,14 @@ public class CoreServiceConfiguration {
                     + "Set computehive.agents.token (COMPUTEHIVE_AGENTS_TOKEN) outside development.");
         }
         return agentToken;
+    }
+
+    /**
+     * Jeton entre applications du mode M/P ({@code computehive.internal.token}, {@code COMPUTEHIVE_INTERNAL_TOKEN}),
+     * vérifié sur les endpoints {@code /internal/**} et présenté par les proxys {@code service-rest-cli}.
+     */
+    @Bean
+    InternalToken internalToken(@Value("${computehive.internal.token:}") String token) {
+        return InternalToken.of(token);
     }
 }

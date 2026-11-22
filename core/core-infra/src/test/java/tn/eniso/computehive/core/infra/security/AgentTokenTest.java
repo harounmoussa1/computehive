@@ -36,5 +36,17 @@ class AgentTokenTest {
     @Test
     void theTokenNeverAppearsInLogs() {
         assertThat(token.toString()).doesNotContain("labo-s3cr3t");
+        assertThat(SharedSecret.of("labo-s3cr3t").toString()).doesNotContain("labo-s3cr3t");
+    }
+
+    @Test
+    void theInternalTokenIsDistinctAndCanBePresentedByAClient() {
+        InternalToken internal = InternalToken.of("between-apps");
+
+        assertThat(internal.accepts("Bearer between-apps")).isTrue();
+        assertThat(internal.accepts("Bearer labo-s3cr3t")).as("the agent token is not enough").isFalse();
+        assertThat(internal.authorization()).isEqualTo("Bearer between-apps");
+        assertThat(InternalToken.disabled().authorization()).isNull();
+        assertThat(InternalToken.disabled().accepts(null)).isTrue();
     }
 }
