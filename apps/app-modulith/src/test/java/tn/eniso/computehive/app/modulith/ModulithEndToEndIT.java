@@ -46,6 +46,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -154,15 +155,26 @@ class ModulithEndToEndIT {
 
     /** Attend que le job, relu par l'API REST, vérifie {@code condition}. */
     private JobInfo awaitJob(String id, Predicate<JobInfo> condition, String description) throws InterruptedException {
+        return await(() -> job(id), condition, "job " + description);
+    }
+
+    /**
+     * Relit {@code state} jusqu'à ce qu'il vérifie {@code condition}. Les modules écrivent chacun dans leur propre
+     * transaction (jamais de transaction distribuée) : à la fin d'un job, le job, sa tentative, la consommation et
+     * la notification sont mis à jour l'un après l'autre. Le test attend donc chaque effet, au lieu de supposer qu'ils
+     * sont tous visibles au même instant.
+     */
+    private static <T> T await(Supplier<T> state, Predicate<T> condition, String description)
+            throws InterruptedException {
         long deadline = System.nanoTime() + TIMEOUT.toNanos();
-        JobInfo job = job(id);
-        while (!condition.test(job)) {
-            assertThat(System.nanoTime()).as("job %s within %s, last state: %s", description, TIMEOUT, job)
+        T value = state.get();
+        while (!condition.test(value)) {
+            assertThat(System.nanoTime()).as("%s within %s, last state: %s", description, TIMEOUT, value)
                     .isLessThan(deadline);
             Thread.sleep(100);
-            job = job(id);
+            value = state.get();
         }
-        return job;
+        return value;
     }
 
     @Test
@@ -180,7 +192,8 @@ class ModulithEndToEndIT {
         assertThat(done.machine().name()).isEqualTo("sim-pc-b");
         assertThat(done.currentEpoch()).isEqualTo(8);
         assertThat(done.accuracy()).isBetween(0.8, 1.0);
-        List<AssignmentInfo> attempts = scheduling.attemptsOf(submitted.id());
+        List<AssignmentInfo> attempts = await(() -> scheduling.attemptsOf(submitted.id()),
+                all -> all.size() == 2 && all.get(1).status() == AssignmentStatus.COMPLETED, "second attempt completed");
         assertThat(attempts).extracting(AssignmentInfo::status)
                 .containsExactly(AssignmentStatus.LOST, AssignmentStatus.COMPLETED);
         assertThat(attempts.get(1).resumeFrom().epoch()).as("resumed from the checkpoint of epoch 2").isEqualTo(2);
@@ -197,12 +210,13 @@ class ModulithEndToEndIT {
         assertThat(done.lastCheckpoint().storageKey()).as("pc-b's own checkpoints").contains("/attempts/2/");
 
         // Le temps de calcul est compté pour le propriétaire, qui est prévenu.
-        UsageInfo usage = rest.getForObject("/api/quotas/u-1", UsageInfo.class);
+        UsageInfo usage = await(() -> rest.getForObject("/api/quotas/u-1", UsageInfo.class),
+                u -> u.jobsCompleted() == 1, "usage recorded");
         assertThat(usage.jobsCompleted()).isEqualTo(1);
         assertThat(usage.gpuSeconds()).isPositive();
         assertThat(usage.priority()).isLessThan(1.0);
-        assertThat(notifications.list).extracting(ILoggingEvent::getFormattedMessage)
-                .anySatisfy(message -> assertThat(message).contains("[job.done]", "u-1", "mnist-e2e"));
+        await(() -> List.copyOf(notifications.list), events -> events.stream().map(ILoggingEvent::getFormattedMessage)
+                .anyMatch(m -> m.contains("[job.done]") && m.contains("u-1") && m.contains("mnist-e2e")), "owner notified");
     }
 
     @Test
