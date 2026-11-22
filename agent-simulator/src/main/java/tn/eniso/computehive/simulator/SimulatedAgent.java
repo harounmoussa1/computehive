@@ -63,6 +63,7 @@ public final class SimulatedAgent implements AutoCloseable {
     private final WorkerGatewayGrpc.WorkerGatewayStub stub;
     private final AgentProfile profile;
     private final Behaviour behaviour;
+    private final CheckpointClient checkpoints;
     private final ScheduledExecutorService thread;
 
     private final Set<String> executedCommands = new HashSet<>();
@@ -77,10 +78,20 @@ public final class SimulatedAgent implements AutoCloseable {
     private boolean crashed;
     private boolean closed;
 
+    /** Agent sans dépôt de fichiers : les checkpoints sont seulement annoncés (tests du protocole seul). */
     public SimulatedAgent(Channel channel, AgentProfile profile, Behaviour behaviour) {
+        this(channel, profile, behaviour, null);
+    }
+
+    /**
+     * @param checkpoints client de l'API de stockage des checkpoints ; {@code null} pour ne déposer ni télécharger
+     *                    aucun fichier
+     */
+    public SimulatedAgent(Channel channel, AgentProfile profile, Behaviour behaviour, CheckpointClient checkpoints) {
         this.stub = WorkerGatewayGrpc.newStub(channel);
         this.profile = profile;
         this.behaviour = behaviour;
+        this.checkpoints = checkpoints;
         this.thread = Executors.newSingleThreadScheduledExecutor(task -> {
             Thread t = new Thread(task, "agent-" + profile.agentId());
             t.setDaemon(true);
@@ -204,6 +215,16 @@ public final class SimulatedAgent implements AutoCloseable {
             acknowledge(commandId, false, "GPU already busy with job " + training.jobId());
             return;
         }
+        if (launch.getResumeFromEpoch() > 0 && checkpoints != null) {
+            try {
+                // Comme l'agent réel : télécharger le checkpoint et vérifier son empreinte avant de reprendre.
+                checkpoints.download(launch.getResumeCheckpointKey(), launch.getResumeCheckpointSha256());
+            } catch (CheckpointClient.CheckpointTransferException e) {
+                log.warn("Cannot resume job {}: {}", launch.getJobId(), e.getMessage());
+                acknowledge(commandId, false, "checkpoint unavailable: " + e.getMessage());
+                return;
+            }
+        }
         acknowledge(commandId, true, null);
         training = new SimulatedTraining(launch.getJobId(), launch.getAttemptId(), launch.getParams().getEpochs(),
                 launch.getParams().getLearningRate(), launch.getResumeFromEpoch());
@@ -255,15 +276,28 @@ public final class SimulatedAgent implements AutoCloseable {
         }
     }
 
-    /** Le dépôt du fichier sur le serveur (PUT /api/checkpoints/...) viendra avec l'extension checkpoint-storage. */
+    /**
+     * Écrit le checkpoint de l'epoch courante : dépôt du fichier sur le serveur, puis annonce {@code CheckpointSaved}
+     * (dans cet ordre, docs/worker-protocol.md §8). Si le dépôt échoue, rien n'est annoncé : le checkpoint officiel
+     * reste le précédent.
+     */
     private void checkpoint() {
+        byte[] content = training.checkpointContent();
+        if (checkpoints != null) {
+            try {
+                checkpoints.upload(training.checkpointKey(), content);
+            } catch (CheckpointClient.CheckpointTransferException e) {
+                log.warn("Checkpoint {} not announced: {}", training.checkpointKey(), e.getMessage());
+                return;
+            }
+        }
         training.recordCheckpoint();
         System.out.printf("[%s] CHECKPOINT epoch=%d path=%s%n", profile.agentId(), training.epoch(),
                 training.checkpointKey());
         send(message().setCheckpointSaved(CheckpointSaved.newBuilder()
                 .setJobId(training.jobId()).setAttemptId(training.attemptId()).setEpoch(training.epoch())
-                .setStorageKey(training.checkpointKey()).setSha256(training.checkpointSha256())
-                .setSizeBytes(1_048_576)));
+                .setStorageKey(training.checkpointKey()).setSha256(CheckpointClient.sha256(content))
+                .setSizeBytes(content.length)));
     }
 
     private void finish(Outcome outcome, String error) {

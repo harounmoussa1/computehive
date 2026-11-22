@@ -11,14 +11,17 @@ import java.util.List;
  * @param port      port gRPC du serveur
  * @param agents    PC simulés (un faux agent chacun)
  * @param behaviour comportement commun à tous les PC simulés
+ * @param storageUrl adresse de l'API REST où déposer les checkpoints, {@code null} pour ne déposer aucun fichier
  */
-record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behaviour behaviour) {
+record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behaviour behaviour, String storageUrl) {
 
     static final String USAGE = """
             Faux agent ComputeHive : simule un ou plusieurs PC workers, en ne parlant que worker.proto.
 
             java -jar agent-simulator.jar [options]
               --server=HOTE:PORT     serveur gRPC (défaut : localhost:9090)
+              --storage-url=URL      API REST de dépôt des checkpoints (défaut : http://HOTE:8080)
+              --no-storage           ne déposer aucun fichier de checkpoint (annonce seule)
               --count=N              nombre de PC simulés (défaut : 1)
               --agent-id=PREFIXE     identifiants PREFIXE-1, PREFIXE-2… (défaut : sim)
               --cpu                  workers CPU, sans GPU
@@ -41,11 +44,15 @@ record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behavi
         String gpuName = "NVIDIA GeForce RTX 3060";
         long gpuMemoryMb = 12_288;
         Behaviour behaviour = Behaviour.normal();
+        String storageUrl = null;
+        boolean storage = true;
         for (String arg : args) {
             String name = arg.contains("=") ? arg.substring(0, arg.indexOf('=')) : arg;
             String value = arg.contains("=") ? arg.substring(arg.indexOf('=') + 1) : "";
             switch (name) {
                 case "--server" -> server = value;
+                case "--storage-url" -> storageUrl = required(name, value);
+                case "--no-storage" -> storage = false;
                 case "--count" -> count = positive(name, value);
                 case "--agent-id" -> prefix = required(name, value);
                 case "--cpu" -> cpu = true;
@@ -68,8 +75,12 @@ record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behavi
             String agentId = prefix + "-" + i;
             agents.add(cpu ? AgentProfile.cpu(agentId) : AgentProfile.gpu(agentId, gpuName, gpuMemoryMb));
         }
-        return new SimulatorOptions(server.substring(0, colon), positive("--server port", server.substring(colon + 1)),
-                List.copyOf(agents), behaviour);
+        String host = server.substring(0, colon);
+        if (storage && storageUrl == null) {
+            storageUrl = "http://" + host + ":8080";
+        }
+        return new SimulatorOptions(host, positive("--server port", server.substring(colon + 1)), List.copyOf(agents),
+                behaviour, storage ? storageUrl : null);
     }
 
     private static String required(String name, String value) {

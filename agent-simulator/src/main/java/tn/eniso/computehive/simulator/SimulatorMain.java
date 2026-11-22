@@ -47,8 +47,9 @@ public final class SimulatorMain {
                 .keepAliveTime(20, TimeUnit.SECONDS)
                 .keepAliveWithoutCalls(true)
                 .build();
+        CheckpointClient checkpoints = options.storageUrl() == null ? null : new CheckpointClient(options.storageUrl());
         List<SimulatedAgent> agents = options.agents().stream()
-                .map(profile -> new SimulatedAgent(channel, profile, options.behaviour()))
+                .map(profile -> new SimulatedAgent(channel, profile, options.behaviour(), checkpoints))
                 .toList();
         agents.forEach(SimulatedAgent::start);
 
