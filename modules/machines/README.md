@@ -72,12 +72,11 @@ Schéma PostgreSQL `machines`, table `machine`, migrations Flyway dans
 | `machines-dal-jpa` | `JpaMachine`, `JpaMachineRepository`, migrations |
 | `machines-service-api` | Façade `MachinesModule`, topics publiés `MachinesEvents` |
 | `machines-service-impl` | `MachineCrudService`, `MachinesModuleImpl`, `MachineSelector`, `MachineFailureDetector`, `MachineDeadPublisher` |
-| `machines-ws-rest` | `GET /api/machines`, `GET /api/machines/{id}` |
-| `machines-service-rest-cli` | Réservé au mode M/P (étape d'assemblage) |
+| `machines-ws-rest` | `GET /api/machines`, `GET /api/machines/{id}` ; `MachinesInternalController` (`/internal/machines/**`, mode M/P) |
+| `machines-service-rest-cli` | `MachinesModuleRestClient` : la façade appelée depuis `app-scheduling` (ADR 0010) |
 
 La façade renvoie `MachineInfo` (immuable) ; l'entité `Machine` ne sort jamais du module.
 
 ## À venir
 
-- Abonnement de `scheduling` à `machines.machine-dead` pour réattribuer les jobs (étapes 5 et 6).
-- `machines-service-rest-cli` (étape assemblage M/P).
+- Tableau de bord (étape 8).

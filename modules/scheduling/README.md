@@ -96,6 +96,8 @@ reçu est traduit (`ProtoTranslator`) en **un** appel de `SchedulingModule`, san
   pour que les `StopJob` de la resynchronisation trouvent la session ouverte.
 - Un message refusé par le module est journalisé ; le stream reste ouvert pour les suivants.
 - Un heartbeat d'une machine inconnue ferme le stream (`NOT_FOUND`) : l'agent se réinscrit.
+- En M/P, si `machines` est injoignable au moment de l'inscription, le stream est fermé avec
+  `UNAVAILABLE` : l'agent se reconnecte plus tard (docs/worker-protocol.md §6.8).
 - **Un stream par machine** (`AgentSessionRegistry`) : une reconnexion remplace l'ancien stream,
   fermé avec `ABORTED` (docs/worker-protocol.md §6.6).
 - Le `message_id` de l'agent sert de `correlationId` dans les logs, avec le `workerId`.
@@ -103,6 +105,10 @@ reçu est traduit (`ProtoTranslator`) en **un** appel de `SchedulingModule`, san
 Dans l'autre sens, `scheduling-service-api` déclare le port `AgentChannel` (envoyer un ordre à une
 machine connectée) ; `AgentSessionRegistry` l'implémente. La couche service envoie donc des ordres
 sans dépendre de gRPC (inversion de dépendance).
+
+En M/P, les tâches périodiques (placement, renvoi des `LaunchJob`, réconciliation) sautent un passage
+avec un avertissement si jobs, machines ou quotas sont injoignables, au lieu d'échouer avec une trace
+complète (`SchedulingConfiguration.guarded`).
 
 `WorkerGatewayServer` démarre le serveur Netty avec l'application ; il envoie des pings sur un stream
 inactif pour détecter un agent disparu, et accepte ceux des agents.
@@ -144,7 +150,8 @@ dans `scheduling-dal-jpa/src/main/resources/db/migration/scheduling` (voir ADR 0
 | `scheduling-service-api` | façade `SchedulingModule`, port `AgentChannel` |
 | `scheduling-service-impl` | services CRUD, `SchedulingModuleImpl`, `JobPlacement`, `LaunchWatchdog`, `Fencing`, `CheckpointVerifier`, `AttemptLifecycle`, `Reassignment`, `SchedulingSubscriptions`, `Reconciler` |
 | `scheduling-ws-grpc` | `WorkerGatewayService`, `ProtoTranslator`, `AgentSessionRegistry` (implémente `AgentChannel`), `WorkerGatewayServer` |
-| `scheduling-ws-rest`, `scheduling-service-rest-cli` | réservés au mode M/P (étape d'assemblage) |
+| `scheduling-ws-rest` | `SchedulingInternalController` : lectures des tentatives (`/internal/scheduling/**`, mode M/P) |
+| `scheduling-service-rest-cli` | `SchedulingModuleRestClient` : lectures des tentatives depuis `app-main` ; les opérations des agents ne passent jamais par lui (ADR 0010) |
 
 ## Tests
 
@@ -156,5 +163,6 @@ dans `scheduling-dal-jpa/src/main/resources/db/migration/scheduling` (voir ADR 0
 | `WorkerGatewayServiceTest` | porte gRPC (serveur en mémoire, faux agent) : traduction, ordres, inscription, reconnexion, erreurs |
 | `WorkerGatewayServerTest` | vrai serveur Netty sur un port libre : connexion d'un agent par le réseau, arrêt propre |
 | `ReassignmentScenariosTest` | 13 scénarios : panne de machine et reprise depuis le checkpoint, ancienne machine écartée par le fencing, job disparu, annulation, réconciliation après un événement perdu, abonnements |
+| `SchedulingConfigurationTest` | une tâche périodique survit à un module distant injoignable (M/P) |
 | `SchedulingScenariosTest` | 30 scénarios : placement (dont la priorité par quotas), checkpoint non déposé, corrompu ou d'une autre tentative refusé, refus, accusé perdu, message rejoué, tentative périmée, reprise depuis un checkpoint, resynchronisation, annulation, renvoi puis abandon |
 

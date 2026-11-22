@@ -113,8 +113,8 @@ Schéma PostgreSQL `jobs`, table `job`, migrations Flyway dans
 | `jobs-dal-jpa` | `JpaJob`, `JpaJobRepository`, migrations |
 | `jobs-service-api` | Façade `JobsModule`, topics publiés `JobsEvents` |
 | `jobs-service-impl` | `JobCrudService`, `JobsModuleImpl`, `JobCancelledPublisher`, `JobFinishedNotifier` |
-| `jobs-ws-rest` | `JobsController`, `SubmitJobRequest` |
-| `jobs-service-rest-cli` | Réservé au mode M/P (étape d'assemblage) |
+| `jobs-ws-rest` | `JobsController`, `SubmitJobRequest` ; `JobsInternalController` (`/internal/jobs/**`, mode M/P) |
+| `jobs-service-rest-cli` | `JobsModuleRestClient` : la façade appelée depuis `app-scheduling` (ADR 0010) |
 
 ## Tests
 

@@ -67,8 +67,8 @@ Schéma PostgreSQL `quotas`, table `usage` (une ligne par utilisateur, `@Version
 | `quotas-dal-jpa` | `JpaUsage`, `JpaUsageRepository`, migration |
 | `quotas-service-api` | façade `QuotasModule` |
 | `quotas-service-impl` | `UsageCrudService`, `UsageRecorder`, `JobUsageInterceptor`, `QuotasModuleImpl` |
-| `quotas-ws-rest` | `QuotasController` |
-| `quotas-service-rest-cli` | réservé au mode M/P (étape d'assemblage) |
+| `quotas-ws-rest` | `QuotasController` ; `QuotasInternalController` (`/internal/quotas/**`, mode M/P) |
+| `quotas-service-rest-cli` | `QuotasModuleRestClient` : `priorityOf` appelé depuis `app-scheduling` (ADR 0010) |
 
 ## Tests
 
@@ -84,4 +84,3 @@ Schéma PostgreSQL `quotas`, table `usage` (une ligne par utilisateur, `@Version
 
 - Fenêtre glissante (consommation des 7 derniers jours) pour que la priorité remonte avec le temps.
 - Temps compté par tentative (fourni par `scheduling`) au lieu du temps total du job.
-- `quotas-service-rest-cli` (étape assemblage M/P).

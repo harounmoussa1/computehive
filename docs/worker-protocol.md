@@ -385,6 +385,21 @@ Un secret commun à tous les PC du labo, réglé sur le serveur par `COMPUTEHIVE
   jamais l'écrire dans les logs ; sur `UNAUTHENTICATED`, ne pas se reconnecter en boucle rapide.
 - Limite : sans TLS, le jeton circule en clair ; il protège le réseau fermé du labo, pas Internet (voir §9).
 
+### 6.8 Adresses du serveur et indisponibilité passagère
+
+Le serveur tourne en M/1 (un processus) ou en M/P (deux applications, ADR 0010). L'agent doit donc
+configurer **deux adresses séparément** : celle du stream gRPC et celle de l'API des checkpoints.
+
+| Mode | Stream gRPC | API des checkpoints |
+|---|---|---|
+| M/1 (`app-modulith`) | `HOTE:9090` | `http://HOTE:8080` |
+| M/P (`docker-compose.yml`) | `HOTE:9090` | `http://HOTE:8081` (`app-scheduling`) |
+
+En M/P, le serveur peut ne pas pouvoir traiter une inscription pendant quelques secondes, par
+exemple quand `app-main` redémarre. Le stream est alors fermé avec le statut gRPC `UNAVAILABLE`.
+L'agent se reconnecte avec son attente croissante habituelle. Ce n'est pas un refus du jeton, qui est
+`UNAUTHENTICATED`.
+
 ---
 
 ## 7. Séquences principales

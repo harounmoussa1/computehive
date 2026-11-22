@@ -68,9 +68,14 @@ computehive/
 ├── core/                      core-infra (références étendues, exceptions, LogKeys),
 │                              core-dal-jpa (schéma + migrations Flyway par module),
 │                              core-service-api (contrat des intercepteurs), core-service-impl
-│                              (distributeur), core-ws-rest (filtre de corrélation, erreurs HTTP)
+│                              (distributeur, jetons), core-service-rest-cli (client des modules
+│                              distants : Resilience4j, erreurs relevées à l'identique),
+│                              core-ws-rest (filtre de corrélation, erreurs HTTP, filtre /internal/**)
 ├── contracts/worker-proto/    worker.proto + code gRPC généré
 ├── tests/architecture-tests/  règles ArchUnit + auto-test des règles
+├── tests/remote-contract-tests/ chaque proxy service-rest-cli contre le vrai contrôleur interne
+├── tests/mp-end-to-end-tests/ les deux jars M/P en processus séparés (PostgreSQL, Kafka, Mailpit)
+├── docker-compose.yml         déploiement M/P du PC serveur (jetons dans .env, cf. .env.example)
 ├── modules/                   (artefacts nommés <module>-<couche>, ex. jobs-service-api)
 │   ├── jobs/                  infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, service-rest-cli
 │   ├── machines/              infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, service-rest-cli
@@ -84,8 +89,9 @@ computehive/
 │                              driver-notif-email, driver-storage-local, driver-storage-remote
 ├── apps/
 │   ├── app-modulith/          M/1 : tout dans un processus (drivers mémoire / log / local)
-│   ├── app-main/              M/P : jobs, machines, quotas + scheduling-service-rest-cli
-│   └── app-scheduling/        M/P : scheduling + gateway gRPC + rest-cli de jobs, machines, quotas
+│   ├── app-main/              M/P : jobs, machines, quotas + scheduling-service-rest-cli (port 8080)
+│   └── app-scheduling/        M/P : scheduling + gateway gRPC + checkpoints + rest-cli de jobs,
+│                              machines, quotas (ports 8081, 9090)
 ├── agent-simulator/           faux agent gRPC pour tester le serveur sans GPU (ne dépend que de worker-proto)
 └── docs/                      worker-protocol.md, adr/
 ```
@@ -177,7 +183,8 @@ Le job simulé de secours affiche les mêmes lignes sans PyTorch.
 5. ✅ `scheduling` + gateway gRPC + agent-simulator.
 6. ✅ Réattribution + fencing (ADR 0007) ; `quotas` ; notifications.
 7. ✅ **Jalon : serveur complet, testé avec le faux agent** (`app-modulith`, `ModulithEndToEndIT`).
-8. Stockage des checkpoints + Resilience4j ; assemblage M/1 et M/P ; tableau de bord.
+8. Stockage des checkpoints + Resilience4j ✅ ; jeton des agents (ADR 0009) ✅ ; assemblage M/P (ADR 0010) ✅ ;
+   tableau de bord.
 9. Intégration avec l'agent réel du binôme ; tests de bout en bout ; documentation.
 
 ## Conventions de code (socle)
@@ -200,6 +207,10 @@ Le job simulé de secours affiche les mêmes lignes sans PyTorch.
   `ddl-auto=validate` (ADR 0005). Entité JPA (`JpaXxx`, package-private) séparée de l'entité du domaine.
 - La façade renvoie des vues immuables (`XxxInfo`) ; l'entité du domaine ne sort pas du module.
 - Le temps vient du bean `Clock` (`core-service-impl`), jamais de `Instant.now()`.
+- M/P (ADR 0010) : chaque façade est exposée telle quelle sur `/internal/<module>/**` (contrôleur `XxxInternalController`
+  du `ws-rest`, `Optional` vide = `204`), protégée par le jeton interne (`InternalApiFilter`, fermée par défaut) ;
+  le proxy `XxxModuleRestClient` passe par `RemoteModuleClient` (`query` = lecture retentée, `command` = retentée
+  seulement si la requête n'est pas partie). Personne ne dépend d'un proxy (ArchUnit).
 - Tests : `*Test` (unitaires, surefire) ; `*IT` (Testcontainers, failsafe, ignorés sans Docker).
 - Chaque module a un `README.md` (définition de terminé).
 
