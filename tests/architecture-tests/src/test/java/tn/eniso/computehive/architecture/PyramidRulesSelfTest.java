@@ -33,6 +33,20 @@ class PyramidRulesSelfTest {
     }
 
     @Test
+    void detectsARestClientThatBypassesTheRemoteModule() {
+        assertThat(violations(PyramidRules.restClientsOnlyImplementTheFacade()))
+                .anyMatch(v -> v.contains("BetaRestClient") && v.contains("BetaRepository"));
+    }
+
+    @Test
+    void detectsAServiceThatPicksTheRemoteProxyItself() {
+        List<String> violations = violations(PyramidRules.nobodyDependsOnARestClient());
+
+        assertThat(violations).anyMatch(v -> v.contains("BetaPlanner.remote") && v.contains("BetaRestClient"));
+        assertThat(violations).noneMatch(v -> v.contains("BetaPlanner.facade"));
+    }
+
+    @Test
     void detectsABusinessServiceUsingARepositoryDirectly() {
         List<String> violations = violations(PyramidRules.repositoriesAreOwnedByCrudServices());
 
