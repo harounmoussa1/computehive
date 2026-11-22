@@ -3,6 +3,7 @@ package tn.eniso.computehive.core.service.impl.interceptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -45,6 +46,8 @@ public class DefaultInterceptorDispatcher implements InterceptorDispatcher {
     private final InterceptorRegistry registry;
     private final TransactionTemplate newTransaction;
 
+    /** Constructeur utilisé par Spring (l'autre sert aux tests). */
+    @Autowired
     public DefaultInterceptorDispatcher(InterceptorRegistry registry,
                                         ObjectProvider<PlatformTransactionManager> transactionManager) {
         this(registry, transactionManager.getIfAvailable());
