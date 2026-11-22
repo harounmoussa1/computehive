@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import tn.eniso.computehive.core.infra.exception.ConflictException;
 import tn.eniso.computehive.core.infra.exception.NotFoundException;
+import tn.eniso.computehive.core.infra.exception.RemoteModuleUnavailableException;
 import tn.eniso.computehive.core.infra.exception.ValidationException;
 import tn.eniso.computehive.core.infra.log.LogKeys;
 
@@ -38,6 +39,16 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ProblemDetail handleConflict(ConflictException e) {
         return problem(HttpStatus.CONFLICT, e.getMessage());
+    }
+
+    /**
+     * Module distant indisponible (mode M/P) : {@code 503}, l'opération peut être retentée. Le client ne voit pas
+     * la cause technique, journalisée ici.
+     */
+    @ExceptionHandler(RemoteModuleUnavailableException.class)
+    public ProblemDetail handleRemoteUnavailable(RemoteModuleUnavailableException e) {
+        log.warn("Request failed, remote module unavailable: {}", e.getMessage());
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "Module " + e.module() + " is temporarily unavailable");
     }
 
     /**

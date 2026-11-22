@@ -135,6 +135,11 @@
             </dependency>
             <dependency>
                 <groupId>tn.eniso.computehive</groupId>
+                <artifactId>core-service-rest-cli</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
                 <artifactId>core-ws-rest</artifactId>
                 <version>${project.version}</version>
             </dependency>
