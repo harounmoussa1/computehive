@@ -1,6 +1,7 @@
 package tn.eniso.computehive.modules.scheduling.ws.grpc;
 
 import io.grpc.Server;
+import io.grpc.ServerInterceptors;
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * Serveur gRPC des agents, démarré et arrêté avec l'application (Spring {@link SmartLifecycle}).
  *
+ * <p>Chaque stream passe d'abord par {@link AgentTokenInterceptor} (jeton partagé des agents).</p>
+ *
  * <p>Les streams des agents restent ouverts des heures : le serveur envoie des pings sur un stream inactif
  * pour détecter un agent disparu, et accepte ceux des agents (sans quoi il fermerait leur connexion).</p>
  */
@@ -21,11 +24,14 @@ public class WorkerGatewayServer implements SmartLifecycle {
     private static final Logger log = LoggerFactory.getLogger(WorkerGatewayServer.class);
 
     private final WorkerGatewayService gateway;
+    private final AgentTokenInterceptor authentication;
     private final GrpcServerProperties properties;
     private Server server;
 
-    public WorkerGatewayServer(WorkerGatewayService gateway, GrpcServerProperties properties) {
+    public WorkerGatewayServer(WorkerGatewayService gateway, AgentTokenInterceptor authentication,
+                               GrpcServerProperties properties) {
         this.gateway = gateway;
+        this.authentication = authentication;
         this.properties = properties;
     }
 
@@ -33,7 +39,7 @@ public class WorkerGatewayServer implements SmartLifecycle {
     public synchronized void start() {
         try {
             server = NettyServerBuilder.forPort(properties.port())
-                    .addService(gateway)
+                    .addService(ServerInterceptors.intercept(gateway, authentication))
                     .keepAliveTime(properties.keepAliveTime().toMillis(), TimeUnit.MILLISECONDS)
                     .keepAliveTimeout(properties.keepAliveTimeout().toMillis(), TimeUnit.MILLISECONDS)
                     .permitKeepAliveTime(properties.permitKeepAliveTime().toMillis(), TimeUnit.MILLISECONDS)

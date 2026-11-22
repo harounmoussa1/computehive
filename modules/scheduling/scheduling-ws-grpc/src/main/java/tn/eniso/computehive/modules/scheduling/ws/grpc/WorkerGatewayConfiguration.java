@@ -16,7 +16,8 @@ import org.springframework.context.annotation.Configuration;
 public class WorkerGatewayConfiguration {
 
     @Bean
-    WorkerGatewayServer workerGatewayServer(WorkerGatewayService gateway, GrpcServerProperties properties) {
-        return new WorkerGatewayServer(gateway, properties);
+    WorkerGatewayServer workerGatewayServer(WorkerGatewayService gateway, AgentTokenInterceptor authentication,
+                                            GrpcServerProperties properties) {
+        return new WorkerGatewayServer(gateway, authentication, properties);
     }
 }
