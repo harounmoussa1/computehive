@@ -20,3 +20,6 @@ data/
 
 # Secrets du docker-compose (voir .env.example)
 .env
+
+# Python (générateur du guide, docs/guide)
+__pycache__/
