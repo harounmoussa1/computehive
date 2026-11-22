@@ -290,6 +290,26 @@
             </dependency>
             <dependency>
                 <groupId>tn.eniso.computehive</groupId>
+                <artifactId>dashboard-infra</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
+                <artifactId>dashboard-service-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
+                <artifactId>dashboard-service-impl</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
+                <artifactId>dashboard-ws-rest</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
                 <artifactId>quotas-service-rest-cli</artifactId>
                 <version>${project.version}</version>
             </dependency>
