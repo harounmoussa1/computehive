@@ -14,6 +14,8 @@ java -jar agent-simulator/target/agent-simulator.jar --server=localhost:9090 --c
 | Option | Effet | Défaut |
 |---|---|---|
 | `--server=HOTE:PORT` | serveur gRPC | `localhost:9090` |
+| `--storage-url=URL` | API REST de dépôt des checkpoints | `http://HOTE:8080` |
+| `--no-storage` | ne déposer aucun fichier (annonce seule) | non |
 | `--count=N` | nombre de PC simulés | 1 |
 | `--agent-id=PREFIXE` | identifiants `PREFIXE-1`, `PREFIXE-2`… | `sim` |
 | `--cpu` | workers CPU, sans GPU | GPU |
@@ -32,9 +34,12 @@ java -jar agent-simulator/target/agent-simulator.jar --server=localhost:9090 --c
 - Répond à chaque ordre par un `CommandAck` ; un `command_id` déjà exécuté n'est jamais réexécuté
   (un `LaunchJob` renvoyé par le serveur est seulement confirmé).
 - Refuse un second job tant que son GPU est occupé.
-- Simule l'entraînement : `Progress` à chaque epoch (perte décroissante), `CheckpointSaved` toutes les
-  N epochs (clé `jobId/attempts/A/epochs/E`, SHA-256 réel d'un contenu fictif), puis `Finished`.
-  Reprend après `resume_from_epoch`.
+- Simule l'entraînement : `Progress` à chaque epoch (perte décroissante), un checkpoint toutes les N epochs,
+  puis `Finished`.
+- Checkpoints (ADR 0008) : il **dépose** le fichier (`PUT /api/checkpoints/jobId/attempts/A/epochs/E`, environ
+  16 Ko de contenu fictif, empreinte annoncée), et n'envoie `CheckpointSaved` qu'après un dépôt réussi.
+- Reprise : il **télécharge** le checkpoint indiqué par `LaunchJob`, vérifie son SHA-256, et refuse le job
+  (`CommandAck` refusé) si le fichier est absent ou corrompu.
 - Arrête le job sur `StopJob` de sa tentative (`Finished(STOPPED)`).
 - Se reconnecte après une coupure : attente de 1 s, doublée à chaque échec, plafonnée à 15 s ; les
   messages produits pendant la coupure sont envoyés après la réinscription.
@@ -58,8 +63,6 @@ Il écrit les mêmes lignes que le script Python (contrat de sortie de `CLAUDE.m
 
 ## Limites (v1)
 
-- Le fichier de checkpoint n'est pas déposé sur le serveur (`PUT /api/checkpoints/...`) : ce sera fait
-  avec l'extension `checkpoint-storage` (étape 8).
 - L'outbox est en mémoire : un arrêt du simulateur perd les messages non envoyés (l'agent réel la persiste).
 
 ## Tests
@@ -67,4 +70,5 @@ Il écrit les mêmes lignes que le script Python (contrat de sortie de `CLAUDE.m
 | Test | Ce qu'il vérifie |
 |---|---|
 | `SimulatedAgentTest` | face à un faux serveur gRPC : inscription, heartbeats, job complet, reprise, `command_id` rejoué, GPU occupé, refus, `StopJob`, échec, crash, reconnexion |
+| `SimulatedAgentCheckpointTest` | face à un faux stockage HTTP : dépôt avant l'annonce, dépôt refusé non annoncé, reprise après téléchargement vérifié, checkpoint corrompu refusé |
 | `SimulatorUnitsTest` | courbe de perte, clés et empreintes des checkpoints, options de la ligne de commande |
