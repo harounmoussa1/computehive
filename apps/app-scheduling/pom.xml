@@ -11,9 +11,22 @@
 
     <artifactId>app-scheduling</artifactId>
     <name>ComputeHive :: App :: Scheduling</name>
-    <description>M/P, processus extrait : scheduling et la gateway gRPC des agents ; jobs, machines et quotas appelés à distance.</description>
+    <description>M/P, processus extrait : scheduling, la porte gRPC et les checkpoints des agents ; jobs, machines et quotas appelés à distance.</description>
+
+    <!--
+      Garde-fous de l'assemblage : jobs, machines et quotas tournent dans app-main, jamais ici ; le broker en
+      mémoire ne traverse pas les processus.
+    -->
+    <properties>
+        <pyramid.banned.1>tn.eniso.computehive:jobs-service-impl</pyramid.banned.1>
+        <pyramid.banned.2>tn.eniso.computehive:machines-service-impl</pyramid.banned.2>
+        <pyramid.banned.3>tn.eniso.computehive:quotas-service-impl</pyramid.banned.3>
+        <pyramid.banned.4>tn.eniso.computehive:driver-broker-memory</pyramid.banned.4>
+        <pyramid.banned.5>tn.eniso.computehive:driver-notif-*</pyramid.banned.5>
+    </properties>
 
     <dependencies>
+        <!-- Module hébergé : implémentation locale, porte gRPC des agents, API interne -->
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>core-service-impl</artifactId>
@@ -38,6 +51,8 @@
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>scheduling-ws-grpc</artifactId>
         </dependency>
+
+        <!-- Modules distants : proxys REST des façades -->
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>jobs-service-rest-cli</artifactId>
@@ -50,13 +65,60 @@
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>quotas-service-rest-cli</artifactId>
         </dependency>
+
+        <!-- Checkpoints des agents : API de dépôt et stockage distant simulé ; Kafka entre les deux applications -->
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
-            <artifactId>driver-broker-kafka</artifactId>
+            <artifactId>checkpoint-storage-ws-rest</artifactId>
         </dependency>
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>driver-storage-remote</artifactId>
         </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>driver-broker-kafka</artifactId>
+        </dependency>
+
+        <!-- Exécution : serveur web, JPA, pilote PostgreSQL, santé de l'application, logs JSON -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+        </dependency>
     </dependencies>
+
+    <build>
+        <finalName>app-scheduling</finalName>
+        <plugins>
+            <!-- Jar exécutable : java -jar apps/app-scheduling/target/app-scheduling.jar (copié dans l'image Docker) -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

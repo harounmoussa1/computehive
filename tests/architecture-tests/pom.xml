@@ -46,6 +46,11 @@
         </dependency>
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
+            <artifactId>core-service-rest-cli</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
             <artifactId>core-ws-rest</artifactId>
             <scope>test</scope>
         </dependency>

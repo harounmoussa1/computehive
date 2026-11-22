@@ -20,11 +20,18 @@ public final class CheckpointClient {
     static final String SHA256_HEADER = "X-Checkpoint-Sha256";
 
     private final String baseUrl;
+    private final String token;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
     /** @param baseUrl adresse de l'API REST du serveur, ex. {@code http://localhost:8080} */
     public CheckpointClient(String baseUrl) {
+        this(baseUrl, null);
+    }
+
+    /** @param token jeton partagé des agents, envoyé dans {@code Authorization: Bearer} ; {@code null} si aucun */
+    public CheckpointClient(String baseUrl, String token) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        this.token = token;
     }
 
     /** Le serveur a refusé ou n'a pas répondu. */
@@ -36,7 +43,7 @@ public final class CheckpointClient {
 
     /** Dépose le checkpoint en annonçant son empreinte ; le serveur la recalcule et refuse un envoi corrompu. */
     void upload(String key, byte[] content) throws CheckpointTransferException {
-        HttpRequest request = HttpRequest.newBuilder(uri(key))
+        HttpRequest request = authorized(HttpRequest.newBuilder(uri(key)))
                 .timeout(Duration.ofSeconds(10))
                 .header("Content-Type", "application/octet-stream")
                 .header(SHA256_HEADER, sha256(content))
@@ -50,7 +57,7 @@ public final class CheckpointClient {
 
     /** Télécharge le checkpoint et vérifie qu'il est intact avant de reprendre l'entraînement. */
     byte[] download(String key, String expectedSha256) throws CheckpointTransferException {
-        HttpRequest request = HttpRequest.newBuilder(uri(key)).timeout(Duration.ofSeconds(10)).GET().build();
+        HttpRequest request = authorized(HttpRequest.newBuilder(uri(key))).timeout(Duration.ofSeconds(10)).GET().build();
         HttpResponse<byte[]> response = send(request, HttpResponse.BodyHandlers.ofByteArray());
         if (response.statusCode() != 200) {
             throw new CheckpointTransferException("download of " + key + " refused: HTTP " + response.statusCode());
@@ -69,6 +76,10 @@ public final class CheckpointClient {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is always available", e);
         }
+    }
+
+    private HttpRequest.Builder authorized(HttpRequest.Builder request) {
+        return token == null ? request : request.header("Authorization", "Bearer " + token);
     }
 
     private URI uri(String key) {

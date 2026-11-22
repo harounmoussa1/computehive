@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.SchedulingConfigurer;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
+import tn.eniso.computehive.core.infra.exception.RemoteModuleUnavailableException;
 import tn.eniso.computehive.modules.scheduling.service.impl.entity.ProcessedAgentMessageCrudService;
 
 import java.time.Clock;
@@ -42,10 +43,27 @@ public class SchedulingConfiguration implements SchedulingConfigurer {
 
     @Override
     public void configureTasks(ScheduledTaskRegistrar registrar) {
-        registrar.addFixedDelayTask(placement::placeWaitingJobs, properties.placementInterval());
-        registrar.addFixedDelayTask(watchdog::checkPendingLaunches, properties.launchWatchdogInterval());
-        registrar.addFixedDelayTask(reconciler::reconcile, properties.reconciliationInterval());
+        registrar.addFixedDelayTask(guarded("placement", placement::placeWaitingJobs), properties.placementInterval());
+        registrar.addFixedDelayTask(guarded("launch watchdog", watchdog::checkPendingLaunches),
+                properties.launchWatchdogInterval());
+        registrar.addFixedDelayTask(guarded("reconciliation", reconciler::reconcile),
+                properties.reconciliationInterval());
         registrar.addFixedDelayTask(this::purgeProcessedMessages, properties.purgeInterval());
+    }
+
+    /**
+     * En M/P, un module distant momentanément injoignable (jobs, machines, quotas) est une situation attendue : la
+     * tâche est sautée avec un avertissement d'une ligne, et refaite au passage suivant. Ces tâches se fondent sur
+     * l'état courant (ADR 0007), donc rien n'est perdu. Toute autre erreur reste une erreur.
+     */
+    static Runnable guarded(String task, Runnable body) {
+        return () -> {
+            try {
+                body.run();
+            } catch (RemoteModuleUnavailableException e) {
+                log.warn("Periodic task '{}' skipped until next run: {}", task, e.getMessage());
+            }
+        };
     }
 
     void purgeProcessedMessages() {

@@ -1,9 +1,12 @@
 package tn.eniso.computehive.modules.scheduling.ws.grpc;
 
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import io.grpc.stub.MetadataUtils;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import tn.eniso.computehive.core.infra.security.AgentToken;
 import tn.eniso.computehive.contracts.worker.v1.AgentMessage;
 import tn.eniso.computehive.modules.scheduling.infra.agent.AgentRegistered;
 import tn.eniso.computehive.modules.scheduling.service.api.SchedulingModule;
@@ -24,10 +27,13 @@ class WorkerGatewayServerTest {
                 .thenReturn(new AgentRegistered("machine-a1", Duration.ofSeconds(10), Duration.ofSeconds(30)));
         AgentSessionRegistry sessions = new AgentSessionRegistry();
         WorkerGatewayServer server = new WorkerGatewayServer(new WorkerGatewayService(scheduling, sessions),
-                GrpcServerProperties.onPort(0));
+                new AgentTokenInterceptor(AgentToken.of("labo-s3cr3t")), GrpcServerProperties.onPort(0));
 
         server.start();
-        ManagedChannel channel = NettyChannelBuilder.forAddress("localhost", server.port()).usePlaintext().build();
+        Metadata credentials = new Metadata();
+        credentials.put(AgentTokenInterceptor.AUTHORIZATION, AgentToken.authorizationFor("labo-s3cr3t"));
+        ManagedChannel channel = NettyChannelBuilder.forAddress("localhost", server.port()).usePlaintext()
+                .intercept(MetadataUtils.newAttachHeadersInterceptor(credentials)).build();
         try {
             TestAgent agent = new TestAgent(channel);
             agent.send(AgentMessage.newBuilder().setRegister(TestAgent.register("a1")));

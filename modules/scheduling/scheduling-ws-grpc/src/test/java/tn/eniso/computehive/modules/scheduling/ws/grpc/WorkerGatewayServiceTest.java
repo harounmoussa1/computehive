@@ -24,6 +24,7 @@ import tn.eniso.computehive.contracts.worker.v1.ServerCommand;
 import tn.eniso.computehive.contracts.worker.v1.StopReason;
 import tn.eniso.computehive.core.infra.exception.ConflictException;
 import tn.eniso.computehive.core.infra.exception.NotFoundException;
+import tn.eniso.computehive.core.infra.exception.RemoteModuleUnavailableException;
 import tn.eniso.computehive.modules.scheduling.infra.agent.AgentCommand;
 import tn.eniso.computehive.modules.scheduling.infra.agent.AgentHeartbeat;
 import tn.eniso.computehive.modules.scheduling.infra.agent.AgentHello;
@@ -44,6 +45,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -120,6 +122,16 @@ class WorkerGatewayServiceTest {
         agent.send(AgentMessage.newBuilder().setRegister(Register.newBuilder().setName("no agent id")));
 
         assertThat(agent.closedStatus().getCode()).isEqualTo(Status.Code.INVALID_ARGUMENT);
+    }
+
+    @Test
+    void whenTheMachinesModuleIsUnreachableTheAgentIsToldToRetryLater() throws Exception {
+        doThrow(new RemoteModuleUnavailableException("machines", "timeout")).when(scheduling).registerAgent(any());
+        TestAgent agent = new TestAgent(channel);
+
+        agent.send(AgentMessage.newBuilder().setRegister(Register.newBuilder().setAgentId("agent-a").setName("pc-a")));
+
+        assertThat(agent.closedStatus().getCode()).isEqualTo(Status.Code.UNAVAILABLE);
     }
 
     @Test

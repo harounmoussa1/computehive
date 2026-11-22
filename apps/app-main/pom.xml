@@ -13,7 +13,20 @@
     <name>ComputeHive :: App :: Main</name>
     <description>M/P, processus principal : jobs, machines et quotas ; scheduling appelé à distance.</description>
 
+    <!--
+      Garde-fous de l'assemblage : scheduling tourne dans app-scheduling, jamais ici (deux ordonnanceurs placeraient
+      les mêmes jobs) ; le broker en mémoire ne traverse pas les processus ; les agents ne parlent qu'à app-scheduling.
+    -->
+    <properties>
+        <pyramid.banned.1>tn.eniso.computehive:scheduling-service-impl</pyramid.banned.1>
+        <pyramid.banned.2>tn.eniso.computehive:scheduling-dal-*</pyramid.banned.2>
+        <pyramid.banned.3>tn.eniso.computehive:scheduling-ws-*</pyramid.banned.3>
+        <pyramid.banned.4>tn.eniso.computehive:driver-broker-memory</pyramid.banned.4>
+        <pyramid.banned.5>tn.eniso.computehive:checkpoint-storage-ws-rest</pyramid.banned.5>
+    </properties>
+
     <dependencies>
+        <!-- Modules hébergés : implémentation locale -->
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>core-service-impl</artifactId>
@@ -58,14 +71,14 @@
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>quotas-ws-rest</artifactId>
         </dependency>
+
+        <!-- Module distant : proxy REST de la façade -->
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>scheduling-service-rest-cli</artifactId>
         </dependency>
-        <dependency>
-            <groupId>tn.eniso.computehive</groupId>
-            <artifactId>checkpoint-storage-ws-rest</artifactId>
-        </dependency>
+
+        <!-- Drivers : Kafka entre les deux applications, notifications par e-mail -->
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>driver-broker-kafka</artifactId>
@@ -74,9 +87,46 @@
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>driver-notif-email</artifactId>
         </dependency>
+
+        <!-- Exécution : serveur web, JPA, pilote PostgreSQL, santé de l'application, logs JSON -->
         <dependency>
-            <groupId>tn.eniso.computehive</groupId>
-            <artifactId>driver-storage-local</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <finalName>app-main</finalName>
+        <plugins>
+            <!-- Jar exécutable : java -jar apps/app-main/target/app-main.jar (copié dans l'image Docker) -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

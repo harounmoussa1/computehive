@@ -17,3 +17,6 @@ Thumbs.db
 # Logs et données locales
 *.log
 data/
+
+# Secrets du docker-compose (voir .env.example)
+.env

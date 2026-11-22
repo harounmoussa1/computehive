@@ -1,0 +1,59 @@
+# ComputeHive en M/P, processus extrait (scheduling, porte gRPC, checkpoints des agents). Les valeurs
+# ${VARIABLE:défaut} se surchargent par variable d'environnement (docker-compose.yml).
+spring:
+  application:
+    name: computehive-scheduling
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:computehive}
+    username: ${DB_USER:computehive}
+    password: ${DB_PASSWORD:computehive}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Les tables sont créées par les migrations Flyway de chaque module ; Hibernate vérifie seulement (ADR 0005).
+      ddl-auto: validate
+  flyway:
+    # Chaque module migre son propre schéma (ModuleMigrations) : ici scheduling seulement.
+    enabled: false
+
+server:
+  port: ${HTTP_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+computehive:
+  agents:
+    # Jeton partagé des agents (docs/worker-protocol.md §6.7). Vide : tout agent est accepté (développement).
+    token: ${COMPUTEHIVE_AGENTS_TOKEN:}
+  internal:
+    # Jeton entre app-main et app-scheduling (API /internal/**, ADR 0010). Obligatoire : sans lui, les proxys de
+    # jobs, machines et quotas refusent de démarrer.
+    token: ${COMPUTEHIVE_INTERNAL_TOKEN:}
+  remote:
+    jobs:
+      url: ${MAIN_URL:http://localhost:8080}
+    machines:
+      url: ${MAIN_URL:http://localhost:8080}
+    quotas:
+      url: ${MAIN_URL:http://localhost:8080}
+  broker:
+    kafka:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      client-id: computehive-scheduling
+  checkpoints:
+    remote:
+      # Stockage distant simulé (en mémoire) : latence et taux de pannes réglables pour la démo de Resilience4j.
+      latency: ${CHECKPOINT_STORE_LATENCY:50ms}
+      failure-rate: ${CHECKPOINT_STORE_FAILURE_RATE:0.0}
+  grpc:
+    port: ${GRPC_PORT:9090}
+  scheduling:
+    placement-interval: 2s
+    launch-ack-timeout: 15s
+    max-launch-sends: 4
+    reconciliation-interval: 15s
+    lost-job-grace: 30s

@@ -87,6 +87,13 @@ class PyramidArchitectureTest {
     }
 
     @Test
+    @DisplayName("M/P : un proxy distant n'implémente que la façade, et personne ne le connaît")
+    void restClients() {
+        PyramidRules.restClientsOnlyImplementTheFacade().check(production);
+        PyramidRules.nobodyDependsOnARestClient().check(production);
+    }
+
+    @Test
     @DisplayName("Core : indépendant des modules, extensions et drivers")
     void core() {
         PyramidRules.coreIsIndependent(ROOT).check(production);

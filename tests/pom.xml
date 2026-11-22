@@ -15,5 +15,7 @@
 
     <modules>
         <module>architecture-tests</module>
+        <module>remote-contract-tests</module>
+        <module>mp-end-to-end-tests</module>
     </modules>
 </project>

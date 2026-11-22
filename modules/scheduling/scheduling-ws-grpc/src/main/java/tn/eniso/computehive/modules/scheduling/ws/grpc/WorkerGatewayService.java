@@ -11,6 +11,7 @@ import tn.eniso.computehive.contracts.worker.v1.ServerCommand;
 import tn.eniso.computehive.contracts.worker.v1.WorkerGatewayGrpc;
 import tn.eniso.computehive.core.infra.exception.ComputeHiveException;
 import tn.eniso.computehive.core.infra.exception.NotFoundException;
+import tn.eniso.computehive.core.infra.exception.RemoteModuleUnavailableException;
 import tn.eniso.computehive.core.infra.exception.ValidationException;
 import tn.eniso.computehive.core.infra.log.LogKeys;
 import tn.eniso.computehive.modules.scheduling.infra.agent.AgentHello;
@@ -120,6 +121,11 @@ public class WorkerGatewayService extends WorkerGatewayGrpc.WorkerGatewayImplBas
                 registered = scheduling.registerAgent(hello);
             } catch (ValidationException e) {
                 refuse(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
+                return;
+            } catch (RemoteModuleUnavailableException e) {
+                // M/P : machines est injoignable. UNAVAILABLE dit à l'agent de se reconnecter plus tard.
+                log.warn("Registration of agent {} postponed: {}", message.getRegister().getAgentId(), e.getMessage());
+                refuse(Status.UNAVAILABLE.withDescription("server temporarily unavailable, retry later"));
                 return;
             }
             session = new AgentSession(registered.machineId(), responses);

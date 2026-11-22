@@ -3,6 +3,7 @@
  *
  * <p>Couche <b>ws-rest</b> : contrôleurs REST. Ils traduisent HTTP en appels de la façade, sans logique métier.</p>
  *
- * <p>Contenu prévu : endpoints appelés par {@code scheduling-service-rest-cli} en mode M/P.</p>
+ * <p>Contenu : {@link tn.eniso.computehive.modules.scheduling.ws.rest.SchedulingInternalController}, API interne
+ * ({@code /internal/scheduling/**}) appelée par {@code scheduling-service-rest-cli} en mode M/P.</p>
  */
 package tn.eniso.computehive.modules.scheduling.ws.rest;

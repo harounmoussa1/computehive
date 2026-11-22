@@ -1,0 +1,38 @@
+<configuration>
+    <!--
+      Deux formats de logs :
+      - par défaut, lisible dans un terminal, avec les clés du MDC entre crochets ;
+      - profil "json" (SPRING_PROFILES_ACTIVE=json) : une ligne JSON par événement, avec correlationId, jobId
+        et workerId comme champs (filtre de corrélation + MDC), pour un outil de collecte de logs.
+    -->
+    <springProfile name="!json">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <charset>UTF-8</charset>
+                <pattern>%d{HH:mm:ss.SSS} %-5level [corr=%X{correlationId:-} job=%X{jobId:-} worker=%X{workerId:-}] %logger{30} - %msg%n</pattern>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <springProfile name="json">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <!-- LogstashEncoder écrit toujours en UTF-8 : il n'a pas de réglage charset. -->
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>correlationId</includeMdcKeyName>
+                <includeMdcKeyName>jobId</includeMdcKeyName>
+                <includeMdcKeyName>workerId</includeMdcKeyName>
+                <customFields>{"application":"computehive-scheduling"}</customFields>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <logger name="tn.eniso.computehive" level="INFO"/>
+    <logger name="computehive.notifications" level="INFO"/>
+    <logger name="org.hibernate.SQL" level="WARN"/>
+    <logger name="io.grpc" level="WARN"/>
+    <logger name="org.apache.kafka" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

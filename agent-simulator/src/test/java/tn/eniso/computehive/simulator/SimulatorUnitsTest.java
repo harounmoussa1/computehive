@@ -72,6 +72,14 @@ class SimulatorUnitsTest {
     }
 
     @Test
+    void theTokenComesFromTheOptionOrFromTheEnvironment() {
+        assertThat(SimulatorOptions.parseWithEnvironment(null).token()).isNull();
+        assertThat(SimulatorOptions.parseWithEnvironment("from-env").token()).isEqualTo("from-env");
+        assertThat(SimulatorOptions.parseWithEnvironment("from-env", "--token=from-option").token())
+                .isEqualTo("from-option");
+    }
+
+    @Test
     void invalidOptionsAreReported() {
         assertThatThrownBy(() -> SimulatorOptions.parse("--colour=blue")).hasMessageContaining("unknown option");
         assertThatThrownBy(() -> SimulatorOptions.parse("--count=0")).hasMessageContaining("positive");

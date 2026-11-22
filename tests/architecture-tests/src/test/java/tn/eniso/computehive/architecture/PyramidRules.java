@@ -76,6 +76,23 @@ final class PyramidRules {
                 .allowEmptyShould(true);
     }
 
+    // ───────────── M/P : le proxy distant remplace l'implémentation, sans que personne ne le voie ─────────────
+
+    static ArchRule restClientsOnlyImplementTheFacade() {
+        return noClasses().that().resideInAPackage("..service.restcli..")
+                .should().dependOnClassesThat().resideInAnyPackage("..service.impl..", "..dal..", "..ws..")
+                .as("service-rest-cli (proxy distant) ne dépend que de la façade : ni service-impl, ni DAL, ni ws")
+                .allowEmptyShould(true);
+    }
+
+    static ArchRule nobodyDependsOnARestClient() {
+        return noClasses().that().resideInAnyPackage("..infra..", "..dal..", "..service.api..", "..service.impl..",
+                        "..ws..")
+                .should().dependOnClassesThat().resideInAPackage("..service.restcli..")
+                .as("on appelle la façade, jamais son proxy : le choix local ou distant appartient à l'assemblage")
+                .allowEmptyShould(true);
+    }
+
     // ───────────── Dans un module : chaque repository appartient à un service CRUD ─────────────
 
     static ArchRule repositoriesAreOwnedByCrudServices() {

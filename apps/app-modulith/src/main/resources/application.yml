@@ -25,6 +25,9 @@ management:
         include: health,info
 
 computehive:
+  agents:
+    # Jeton partagé des agents (docs/worker-protocol.md §6.7). Vide : tout agent est accepté (développement).
+    token: ${COMPUTEHIVE_AGENTS_TOKEN:}
   checkpoints:
     local:
       # Dossier des checkpoints déposés par les agents (un volume Docker en production).

@@ -5,7 +5,11 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
+import io.grpc.Status;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import io.grpc.stub.MetadataUtils;
+import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,12 +25,17 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import tn.eniso.computehive.contracts.worker.v1.AgentMessage;
+import tn.eniso.computehive.contracts.worker.v1.Register;
+import tn.eniso.computehive.contracts.worker.v1.ServerCommand;
+import tn.eniso.computehive.contracts.worker.v1.WorkerGatewayGrpc;
 import tn.eniso.computehive.modules.jobs.infra.JobInfo;
 import tn.eniso.computehive.modules.jobs.infra.JobStatus;
 import tn.eniso.computehive.modules.machines.infra.MachineStatus;
@@ -41,10 +50,17 @@ import tn.eniso.computehive.simulator.Behaviour;
 import tn.eniso.computehive.simulator.CheckpointClient;
 import tn.eniso.computehive.simulator.SimulatedAgent;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -64,6 +80,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "computehive.grpc.port=0",
+        "computehive.agents.token=" + ModulithEndToEndIT.AGENT_TOKEN,
         "computehive.machines.heartbeat-interval=1s",
         "computehive.machines.lease-ttl=3s",
         "computehive.machines.detection-interval=500ms",
@@ -79,6 +96,7 @@ class ModulithEndToEndIT {
     @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
+    static final String AGENT_TOKEN = "e2e-labo-token";
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
     private static final Behaviour FAST = Behaviour.normal()
             .withEpochDuration(Duration.ofMillis(300))
@@ -114,7 +132,10 @@ class ModulithEndToEndIT {
 
     @BeforeEach
     void setUp() {
-        channel = NettyChannelBuilder.forAddress("localhost", gateway.port()).usePlaintext().build();
+        Metadata credentials = new Metadata();
+        credentials.put(Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER), "Bearer " + AGENT_TOKEN);
+        channel = NettyChannelBuilder.forAddress("localhost", gateway.port()).usePlaintext()
+                .intercept(MetadataUtils.newAttachHeadersInterceptor(credentials)).build();
         notificationLogger.setLevel(Level.INFO);
         notifications.start();
         notificationLogger.addAppender(notifications);
@@ -129,7 +150,7 @@ class ModulithEndToEndIT {
 
     private void startAgent(String agentId, Behaviour behaviour) {
         SimulatedAgent agent = new SimulatedAgent(channel, AgentProfile.gpu(agentId, "RTX 3060", 12_288), behaviour,
-                new CheckpointClient("http://localhost:" + httpPort));
+                new CheckpointClient("http://localhost:" + httpPort, AGENT_TOKEN));
         agents.add(agent);
         agent.start();
     }
@@ -204,7 +225,10 @@ class ModulithEndToEndIT {
         String resumeKey = attempts.get(1).resumeFrom().checkpointKey();
         assertThat(resumeKey).isEqualTo(submitted.id() + "/attempts/1/epochs/2");
         assertThat(checkpointDirectory.resolve(resumeKey)).isRegularFile();
-        ResponseEntity<byte[]> file = rest.getForEntity("/api/checkpoints/" + resumeKey, byte[].class);
+        HttpHeaders agentHeaders = new HttpHeaders();
+        agentHeaders.setBearerAuth(AGENT_TOKEN);
+        ResponseEntity<byte[]> file = rest.exchange("/api/checkpoints/" + resumeKey, HttpMethod.GET,
+                new HttpEntity<>(agentHeaders), byte[].class);
         assertThat(file.getHeaders().getFirst("X-Checkpoint-Sha256"))
                 .isEqualTo(attempts.get(1).resumeFrom().checkpointSha256());
         assertThat(done.lastCheckpoint().storageKey()).as("pc-b's own checkpoints").contains("/attempts/2/");
@@ -217,6 +241,46 @@ class ModulithEndToEndIT {
         assertThat(usage.priority()).isLessThan(1.0);
         await(() -> List.copyOf(notifications.list), events -> events.stream().map(ILoggingEvent::getFormattedMessage)
                 .anyMatch(m -> m.contains("[job.done]") && m.contains("u-1") && m.contains("mnist-e2e")), "owner notified");
+    }
+
+    @Test
+    void aProgramWithoutTheAgentTokenCanNeitherConnectNorTouchCheckpoints() throws Exception {
+        ManagedChannel intruder = NettyChannelBuilder.forAddress("localhost", gateway.port()).usePlaintext().build();
+        try {
+            BlockingQueue<Status> closed = new LinkedBlockingQueue<>();
+            StreamObserver<AgentMessage> stream = WorkerGatewayGrpc.newStub(intruder).connect(new StreamObserver<>() {
+                @Override
+                public void onNext(ServerCommand command) {
+                }
+
+                @Override
+                public void onError(Throwable error) {
+                    closed.add(Status.fromThrowable(error));
+                }
+
+                @Override
+                public void onCompleted() {
+                    closed.add(Status.OK);
+                }
+            });
+            stream.onNext(AgentMessage.newBuilder().setMessageId("m-1").setRegister(Register.newBuilder()
+                    .setAgentId("intruder").setName("intruder")).build());
+
+            assertThat(closed.poll(10, TimeUnit.SECONDS)).extracting(Status::getCode)
+                    .isEqualTo(Status.Code.UNAUTHENTICATED);
+            assertThat(machines.findAll()).noneMatch(machine -> machine.name().equals("intruder"));
+        } finally {
+            intruder.shutdownNow();
+        }
+
+        // Client HTTP du JDK, comme un agent : celui de TestRestTemplate ne sait pas lire un 401 sur un PUT.
+        HttpResponse<String> upload = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + httpPort + "/api/checkpoints/j-1/attempts/1/epochs/1"))
+                .header("Content-Type", "application/octet-stream")
+                .PUT(HttpRequest.BodyPublishers.ofByteArray(new byte[]{1, 2, 3}))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(upload.statusCode()).isEqualTo(401);
+        assertThat(upload.body()).contains("missing or invalid agent token");
     }
 
     @Test
