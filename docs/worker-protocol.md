@@ -6,6 +6,17 @@
 > et liste les points du README-AGENT à corriger ou à trancher.
 > Référence commune : `CLAUDE.md` (contexte du projet) et la Pyramid Architecture.
 
+> **Pour coder l'agent, `worker.proto` ne suffit pas.** Le `.proto` décrit seulement les messages
+> du stream gRPC. Le reste du contrat est dans ce document :
+
+| Sujet | Où |
+|---|---|
+| messages du stream gRPC | `worker.proto` (§5) |
+| règles que le serveur applique : fencing, dédoublonnage, un stream par machine | §6.1 à §6.6 |
+| jeton des agents, dans les **en-têtes** gRPC et HTTP | §6.7 |
+| les deux adresses du serveur (gRPC et HTTP), statut `UNAVAILABLE` | §6.8 |
+| **API HTTP des checkpoints** : dépôt et téléchargement des fichiers | §8 et §8.1 |
+
 ## Sommaire
 
 1. Rôle du serveur vis-à-vis des agents
@@ -462,6 +473,66 @@ PC-12 (revenu)                                 Serveur
 
 Ce fonctionnement remplace l'upload direct vers un stockage objet décrit dans le README-AGENT.
 Il évite au serveur de générer des URL signées et respecte le modèle extension/driver.
+
+### 8.1 L'API HTTP des checkpoints (à implémenter par l'agent)
+
+Les fichiers ne passent jamais par le stream gRPC : un gros fichier y retarderait les heartbeats.
+Le canal HTTP sert **uniquement** aux fichiers. Adresse de base : `http://HOTE:8081` en M/P,
+`http://HOTE:8080` en M/1 (§6.8).
+
+La **clé** d'un checkpoint a la forme `{jobId}/attempts/{attemptId}/epochs/{epoch}`, par exemple
+`7f3c…/attempts/1/epochs/2`. C'est la même chaîne que :
+- `storage_key`, dans `CheckpointSaved` ;
+- `resume_checkpoint_key`, dans `LaunchJob`.
+
+L'URL d'un fichier est `/api/checkpoints/{clé}`.
+
+**Déposer** (après chaque `CHECKPOINT epoch=… path=…` du script, avant `CheckpointSaved`) :
+
+```
+PUT /api/checkpoints/{jobId}/attempts/{attemptId}/epochs/{epoch}
+Authorization: Bearer <jeton des agents>
+Content-Type: application/octet-stream
+X-Checkpoint-Sha256: <SHA-256 du fichier, 64 caractères hexadécimaux>   (recommandé)
+
+<contenu brut du fichier>
+```
+
+| Réponse | Signification | Que fait l'agent |
+|---|---|---|
+| `201 Created` | fichier enregistré ; corps JSON `{"key", "sha256", "sizeBytes", "storedAt"}` | envoyer `CheckpointSaved` avec cette clé et ce SHA-256 |
+| `400 Bad Request` | clé invalide, ou SHA-256 reçu différent de celui annoncé (envoi corrompu) | renvoyer le fichier |
+| `401 Unauthorized` | jeton absent ou faux | vérifier la configuration ; ne pas boucler |
+| `503 Service Unavailable` | stockage momentanément indisponible | réessayer plus tard (attente croissante) ; ne **pas** annoncer le checkpoint |
+
+**Télécharger** (à la reprise, quand `LaunchJob.resume_from_epoch > 0`) :
+
+```
+GET /api/checkpoints/{resume_checkpoint_key}
+Authorization: Bearer <jeton des agents>
+```
+
+| Réponse | Signification | Que fait l'agent |
+|---|---|---|
+| `200 OK` | corps = le fichier ; en-tête `X-Checkpoint-Sha256` = son empreinte | calculer le SHA-256 du fichier reçu, le comparer à `resume_checkpoint_sha256`, puis lancer le script depuis l'epoch |
+| `404 Not Found` | fichier absent | refuser le job : `CommandAck(accepted=false)` ; le serveur le replace ailleurs |
+| `401` / `503` | comme pour le dépôt | — |
+
+Si le SHA-256 ne correspond pas, refuser aussi le job (`CommandAck` refusé) : ne jamais reprendre
+sur un fichier corrompu.
+
+**Tester à la main**, avec le serveur lancé (`docker compose up`) et le jeton du fichier `.env` :
+
+```
+curl -i -X PUT http://HOTE:8081/api/checkpoints/job-test/attempts/1/epochs/2 \
+     -H "Authorization: Bearer <jeton>" -H "Content-Type: application/octet-stream" \
+     --data-binary @checkpoint.pt
+curl -i http://HOTE:8081/api/checkpoints/job-test/attempts/1/epochs/2 \
+     -H "Authorization: Bearer <jeton>" -o checkpoint-relu.pt
+```
+
+**Implémentation de référence** : `agent-simulator`, classe `CheckpointClient` (dépôt et
+téléchargement) et `SimulatedAgent` (ordre dépôt → annonce, vérification avant reprise).
 
 ---
 
