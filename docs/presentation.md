@@ -410,7 +410,7 @@ Un job simulé affiche les mêmes lignes sans PyTorch, pour les tests.
 | 4 | Messagerie : contrat, driver mémoire, driver Kafka ; publication de `MachineDead` | ✅ |
 | 5 | `scheduling` (placement, fencing, messages des agents) + porte gRPC + faux agent | ✅ |
 | 6 | Réattribution depuis le checkpoint, réconciliation, quotas et priorité, notifications (logs, e-mail Mailpit) | ✅ |
-| 7 | **Jalon : serveur complet testé avec le faux agent** | ⏳ |
+| 7 | **Jalon : serveur complet testé avec le faux agent** (`app-modulith`, test de bout en bout avec panne et reprise) | ✅ |
 | 8 | Checkpoints + Resilience4j, M/1 et M/P, Docker Compose, tableau de bord | ⏳ |
 | 9 | Intégration avec l'agent réel, tests de bout en bout | ⏳ |
 
