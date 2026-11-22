@@ -15,5 +15,6 @@
 
     <modules>
         <module>architecture-tests</module>
+        <module>remote-contract-tests</module>
     </modules>
 </project>
