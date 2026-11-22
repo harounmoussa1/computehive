@@ -9,12 +9,16 @@ import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -34,8 +38,10 @@ import tn.eniso.computehive.modules.scheduling.service.api.SchedulingModule;
 import tn.eniso.computehive.modules.scheduling.ws.grpc.WorkerGatewayServer;
 import tn.eniso.computehive.simulator.AgentProfile;
 import tn.eniso.computehive.simulator.Behaviour;
+import tn.eniso.computehive.simulator.CheckpointClient;
 import tn.eniso.computehive.simulator.SimulatedAgent;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -77,6 +83,17 @@ class ModulithEndToEndIT {
             .withEpochDuration(Duration.ofMillis(300))
             .withMaxReconnectDelay(Duration.ofSeconds(1));
 
+    @TempDir
+    static Path checkpointDirectory;
+
+    @DynamicPropertySource
+    static void checkpointStorage(DynamicPropertyRegistry registry) {
+        registry.add("computehive.checkpoints.local.directory", () -> checkpointDirectory.toString());
+    }
+
+    @LocalServerPort
+    private int httpPort;
+
     @Autowired
     private TestRestTemplate rest;
 
@@ -110,7 +127,8 @@ class ModulithEndToEndIT {
     }
 
     private void startAgent(String agentId, Behaviour behaviour) {
-        SimulatedAgent agent = new SimulatedAgent(channel, AgentProfile.gpu(agentId, "RTX 3060", 12_288), behaviour);
+        SimulatedAgent agent = new SimulatedAgent(channel, AgentProfile.gpu(agentId, "RTX 3060", 12_288), behaviour,
+                new CheckpointClient("http://localhost:" + httpPort));
         agents.add(agent);
         agent.start();
     }
@@ -168,6 +186,15 @@ class ModulithEndToEndIT {
         assertThat(attempts.get(1).resumeFrom().epoch()).as("resumed from the checkpoint of epoch 2").isEqualTo(2);
         assertThat(machines.findById(attempts.get(0).machine().id()).orElseThrow().status())
                 .isEqualTo(MachineStatus.DEAD);
+
+        // Le checkpoint de reprise a réellement été déposé par pc-a, vérifié, puis téléchargé par pc-b.
+        String resumeKey = attempts.get(1).resumeFrom().checkpointKey();
+        assertThat(resumeKey).isEqualTo(submitted.id() + "/attempts/1/epochs/2");
+        assertThat(checkpointDirectory.resolve(resumeKey)).isRegularFile();
+        ResponseEntity<byte[]> file = rest.getForEntity("/api/checkpoints/" + resumeKey, byte[].class);
+        assertThat(file.getHeaders().getFirst("X-Checkpoint-Sha256"))
+                .isEqualTo(attempts.get(1).resumeFrom().checkpointSha256());
+        assertThat(done.lastCheckpoint().storageKey()).as("pc-b's own checkpoints").contains("/attempts/2/");
 
         // Le temps de calcul est compté pour le propriétaire, qui est prévenu.
         UsageInfo usage = rest.getForObject("/api/quotas/u-1", UsageInfo.class);
