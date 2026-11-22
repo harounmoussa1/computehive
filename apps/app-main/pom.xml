@@ -71,6 +71,14 @@
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>quotas-ws-rest</artifactId>
         </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>dashboard-service-impl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>dashboard-ws-rest</artifactId>
+        </dependency>
 
         <!-- Module distant : proxy REST de la façade -->
         <dependency>
