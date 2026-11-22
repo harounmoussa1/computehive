@@ -15,6 +15,7 @@ import tn.eniso.computehive.modules.scheduling.infra.agent.AgentRegistered;
 import tn.eniso.computehive.modules.scheduling.infra.agent.RunningAttempt;
 import tn.eniso.computehive.modules.scheduling.service.impl.entity.AssignmentCrudService;
 import tn.eniso.computehive.modules.scheduling.service.impl.entity.ProcessedAgentMessageCrudService;
+import tn.eniso.computehive.modules.scheduling.service.impl.support.FakeCheckpointStore;
 import tn.eniso.computehive.modules.scheduling.service.impl.support.FakeJobsModule;
 import tn.eniso.computehive.modules.scheduling.service.impl.support.FakeMachinesModule;
 import tn.eniso.computehive.modules.scheduling.service.impl.support.FakeQuotasModule;
@@ -51,8 +52,9 @@ class SchedulingFixture {
     final LaunchWatchdog watchdog = new LaunchWatchdog(assignments, jobs, agents, lifecycle, properties, clock);
     final Reassignment reassignment = new Reassignment(assignments, jobs, lifecycle, properties, clock);
     final Reconciler reconciler = new Reconciler(assignments, jobs, machines, lifecycle);
-    final SchedulingModuleImpl scheduling =
-            new SchedulingModuleImpl(machines, jobs, assignments, processed, fencing, lifecycle, reassignment, clock);
+    final FakeCheckpointStore checkpointStore = new FakeCheckpointStore();
+    final SchedulingModuleImpl scheduling = new SchedulingModuleImpl(machines, jobs, assignments, processed, fencing,
+            lifecycle, reassignment, new CheckpointVerifier(checkpointStore), clock);
 
     private int messages;
 
