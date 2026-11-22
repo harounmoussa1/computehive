@@ -25,5 +25,9 @@
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>machines-service-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>core-service-rest-cli</artifactId>
+        </dependency>
     </dependencies>
 </project>
