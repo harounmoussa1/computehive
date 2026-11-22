@@ -36,6 +36,7 @@ import tn.eniso.computehive.contracts.worker.v1.AgentMessage;
 import tn.eniso.computehive.contracts.worker.v1.Register;
 import tn.eniso.computehive.contracts.worker.v1.ServerCommand;
 import tn.eniso.computehive.contracts.worker.v1.WorkerGatewayGrpc;
+import tn.eniso.computehive.modules.dashboard.infra.JobDetails;
 import tn.eniso.computehive.modules.jobs.infra.JobInfo;
 import tn.eniso.computehive.modules.jobs.infra.JobStatus;
 import tn.eniso.computehive.modules.machines.infra.MachineStatus;
@@ -220,6 +221,9 @@ class ModulithEndToEndIT {
         assertThat(attempts.get(1).resumeFrom().epoch()).as("resumed from the checkpoint of epoch 2").isEqualTo(2);
         assertThat(machines.findById(attempts.get(0).machine().id()).orElseThrow().status())
                 .isEqualTo(MachineStatus.DEAD);
+        JobDetails onDashboard = rest.getForObject("/api/dashboard/jobs/" + submitted.id(), JobDetails.class);
+        assertThat(onDashboard.attempts()).as("the dashboard shows both attempts").extracting(AssignmentInfo::status)
+                .containsExactly(AssignmentStatus.LOST, AssignmentStatus.COMPLETED);
 
         // Le checkpoint de reprise a réellement été déposé par pc-a, vérifié, puis téléchargé par pc-b.
         String resumeKey = attempts.get(1).resumeFrom().checkpointKey();
@@ -286,6 +290,8 @@ class ModulithEndToEndIT {
     @Test
     void theRestApiAnswersWithProblemDetailsAndTheHealthEndpointIsUp() {
         assertThat(rest.getForObject("/actuator/health", String.class)).contains("\"status\":\"UP\"");
+        assertThat(rest.getForObject("/", String.class)).as("dashboard page").contains("ComputeHive — tableau de bord");
+        assertThat(rest.getForObject("/api/dashboard", String.class)).contains("\"jobsByStatus\"");
 
         ResponseEntity<String> unknown = rest.getForEntity("/api/jobs/ghost", String.class);
         assertThat(unknown.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
