@@ -11,6 +11,7 @@ import org.springframework.http.converter.json.MappingJackson2HttpMessageConvert
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import tn.eniso.computehive.core.infra.exception.NotFoundException;
+import tn.eniso.computehive.core.infra.security.AgentToken;
 import tn.eniso.computehive.core.ws.rest.ApiExceptionHandler;
 import tn.eniso.computehive.extensions.checkpoints.api.CheckpointKey;
 import tn.eniso.computehive.extensions.checkpoints.api.CheckpointStorageException;
@@ -126,6 +127,23 @@ class CheckpointControllerTest {
     void anUnknownCheckpointIs404AndAnInvalidKeyIs400() throws Exception {
         mvc.perform(get(URL)).andExpect(status().isNotFound());
         mvc.perform(get("/api/checkpoints/j-7/attempts/0/epochs/4")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void onlyAgentsWithTheSharedTokenReachTheCheckpoints() throws Exception {
+        MockMvc protectedApi = MockMvcBuilders.standaloneSetup(new CheckpointController(store))
+                .addFilters(new CheckpointAuthenticationFilter(AgentToken.of("labo-s3cr3t")))
+                .build();
+
+        protectedApi.perform(put(URL).contentType(MediaType.APPLICATION_OCTET_STREAM).content(WEIGHTS))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("WWW-Authenticate", "Bearer"))
+                .andExpect(jsonPath("$.detail").value("missing or invalid agent token"));
+        protectedApi.perform(get(URL).header("Authorization", "Bearer guessed"))
+                .andExpect(status().isUnauthorized());
+        protectedApi.perform(put(URL).contentType(MediaType.APPLICATION_OCTET_STREAM).content(WEIGHTS)
+                        .header("Authorization", "Bearer labo-s3cr3t"))
+                .andExpect(status().isCreated());
     }
 
     @Test
