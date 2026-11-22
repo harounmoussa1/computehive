@@ -16,8 +16,8 @@
 
     <springProfile name="json">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <!-- LogstashEncoder écrit toujours en UTF-8 : il n'a pas de réglage charset. -->
             <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-                <charset>UTF-8</charset>
                 <includeMdcKeyName>correlationId</includeMdcKeyName>
                 <includeMdcKeyName>jobId</includeMdcKeyName>
                 <includeMdcKeyName>workerId</includeMdcKeyName>
