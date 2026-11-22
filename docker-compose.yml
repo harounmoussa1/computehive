@@ -1,0 +1,132 @@
+# ComputeHive en M/P sur le PC serveur : deux applications (app-main, app-scheduling), PostgreSQL, Kafka et Mailpit.
+#
+#   1. cp .env.example .env            puis choisir les deux jetons
+#   2. ./mvnw package -DskipTests      construit les jars copiés dans les images
+#   3. docker compose up --build -d    démarre le serveur
+#      docker compose --profile demo up --build -d   … avec deux faux agents GPU (démo sans vrai PC)
+#
+# Les agents des PC du laboratoire se connectent à HOTE:9090 (gRPC) et déposent leurs checkpoints sur
+# http://HOTE:8081 ; les utilisateurs et le tableau de bord passent par http://HOTE:8080.
+name: computehive
+
+x-internal-token: &internal-token
+  COMPUTEHIVE_INTERNAL_TOKEN: ${COMPUTEHIVE_INTERNAL_TOKEN:?définir COMPUTEHIVE_INTERNAL_TOKEN dans .env}
+
+x-database: &database
+  DB_HOST: postgres
+  DB_NAME: computehive
+  DB_USER: computehive
+  DB_PASSWORD: ${DB_PASSWORD:-computehive}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: computehive
+      POSTGRES_USER: computehive
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-computehive}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      # Pour pgAdmin depuis le PC serveur ; 5434 évite le PostgreSQL déjà installé sur 5432.
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U computehive -d computehive"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.7.1
+    environment:
+      # Un seul nœud KRaft (broker + contrôleur), sans ZooKeeper.
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  mailpit:
+    # Faux serveur SMTP : les notifications envoyées aux utilisateurs se lisent sur http://HOTE:8025.
+    image: axllent/mailpit:v1.21
+    ports:
+      - "8025:8025"
+
+  app-main:
+    build: apps/app-main
+    environment:
+      <<: [*internal-token, *database]
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      SCHEDULING_URL: http://app-scheduling:8081
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health > /dev/null"]
+      interval: 5s
+      timeout: 3s
+      start_period: 30s
+      retries: 30
+    restart: unless-stopped
+
+  app-scheduling:
+    build: apps/app-scheduling
+    environment:
+      <<: [*internal-token, *database]
+      COMPUTEHIVE_AGENTS_TOKEN: ${COMPUTEHIVE_AGENTS_TOKEN:?définir COMPUTEHIVE_AGENTS_TOKEN dans .env}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MAIN_URL: http://app-main:8080
+    ports:
+      - "8081:8081"
+      - "9090:9090"
+    depends_on:
+      app-main:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8081/actuator/health > /dev/null"]
+      interval: 5s
+      timeout: 3s
+      start_period: 30s
+      retries: 30
+    restart: unless-stopped
+
+  # Profil "demo" : deux faux PC GPU, pour montrer le serveur sans le vrai agent. Pour simuler la panne d'un PC :
+  #   docker compose kill agent-a      (le job repart sur agent-b depuis son dernier checkpoint)
+  agent-a: &simulated-agent
+    profiles: [demo]
+    build: agent-simulator
+    command: ["--server=app-scheduling:9090", "--storage-url=http://app-scheduling:8081", "--agent-id=pc-a"]
+    environment:
+      COMPUTEHIVE_AGENTS_TOKEN: ${COMPUTEHIVE_AGENTS_TOKEN:?définir COMPUTEHIVE_AGENTS_TOKEN dans .env}
+    depends_on:
+      app-scheduling:
+        condition: service_healthy
+
+  agent-b:
+    <<: *simulated-agent
+    command: ["--server=app-scheduling:9090", "--storage-url=http://app-scheduling:8081", "--agent-id=pc-b"]
+
+volumes:
+  postgres-data:
+  kafka-data:
