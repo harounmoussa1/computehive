@@ -1,7 +1,9 @@
 package tn.eniso.computehive.simulator;
 
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import io.grpc.stub.MetadataUtils;
 
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
@@ -42,12 +44,21 @@ public final class SimulatorMain {
 
         // Un seul canal pour tous les agents : chacun ouvre son propre stream dessus.
         // Pings réguliers : une coupure du réseau est détectée même sans message à envoyer.
-        ManagedChannel channel = NettyChannelBuilder.forAddress(options.host(), options.port())
+        NettyChannelBuilder builder = NettyChannelBuilder.forAddress(options.host(), options.port())
                 .usePlaintext()
                 .keepAliveTime(20, TimeUnit.SECONDS)
-                .keepAliveWithoutCalls(true)
-                .build();
-        CheckpointClient checkpoints = options.storageUrl() == null ? null : new CheckpointClient(options.storageUrl());
+                .keepAliveWithoutCalls(true);
+        if (options.token() != null) {
+            // Jeton partagé des agents : envoyé à l'ouverture de chaque stream (metadata gRPC).
+            Metadata credentials = new Metadata();
+            credentials.put(Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER),
+                    "Bearer " + options.token());
+            builder.intercept(MetadataUtils.newAttachHeadersInterceptor(credentials));
+        }
+        ManagedChannel channel = builder.build();
+        CheckpointClient checkpoints = options.storageUrl() == null
+                ? null
+                : new CheckpointClient(options.storageUrl(), options.token());
         List<SimulatedAgent> agents = options.agents().stream()
                 .map(profile -> new SimulatedAgent(channel, profile, options.behaviour(), checkpoints))
                 .toList();

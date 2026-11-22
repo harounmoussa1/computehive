@@ -12,8 +12,10 @@ import java.util.List;
  * @param agents    PC simulés (un faux agent chacun)
  * @param behaviour comportement commun à tous les PC simulés
  * @param storageUrl adresse de l'API REST où déposer les checkpoints, {@code null} pour ne déposer aucun fichier
+ * @param token      jeton partagé des agents, {@code null} si le serveur n'en demande pas
  */
-record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behaviour behaviour, String storageUrl) {
+record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behaviour behaviour, String storageUrl,
+                        String token) {
 
     static final String USAGE = """
             Faux agent ComputeHive : simule un ou plusieurs PC workers, en ne parlant que worker.proto.
@@ -22,6 +24,7 @@ record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behavi
               --server=HOTE:PORT     serveur gRPC (défaut : localhost:9090)
               --storage-url=URL      API REST de dépôt des checkpoints (défaut : http://HOTE:8080)
               --no-storage           ne déposer aucun fichier de checkpoint (annonce seule)
+              --token=JETON          jeton partagé des agents (défaut : variable COMPUTEHIVE_AGENTS_TOKEN)
               --count=N              nombre de PC simulés (défaut : 1)
               --agent-id=PREFIXE     identifiants PREFIXE-1, PREFIXE-2… (défaut : sim)
               --cpu                  workers CPU, sans GPU
@@ -37,6 +40,11 @@ record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behavi
 
     /** @throws IllegalArgumentException si une option est inconnue ou invalide */
     static SimulatorOptions parse(String... args) {
+        return parseWithEnvironment(System.getenv("COMPUTEHIVE_AGENTS_TOKEN"), args);
+    }
+
+    /** @param tokenFromEnvironment jeton lu dans l'environnement, utilisé si {@code --token} est absent */
+    static SimulatorOptions parseWithEnvironment(String tokenFromEnvironment, String... args) {
         String server = "localhost:9090";
         int count = 1;
         String prefix = "sim";
@@ -46,6 +54,7 @@ record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behavi
         Behaviour behaviour = Behaviour.normal();
         String storageUrl = null;
         boolean storage = true;
+        String token = tokenFromEnvironment == null || tokenFromEnvironment.isBlank() ? null : tokenFromEnvironment;
         for (String arg : args) {
             String name = arg.contains("=") ? arg.substring(0, arg.indexOf('=')) : arg;
             String value = arg.contains("=") ? arg.substring(arg.indexOf('=') + 1) : "";
@@ -53,6 +62,7 @@ record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behavi
                 case "--server" -> server = value;
                 case "--storage-url" -> storageUrl = required(name, value);
                 case "--no-storage" -> storage = false;
+                case "--token" -> token = required(name, value);
                 case "--count" -> count = positive(name, value);
                 case "--agent-id" -> prefix = required(name, value);
                 case "--cpu" -> cpu = true;
@@ -80,7 +90,7 @@ record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behavi
             storageUrl = "http://" + host + ":8080";
         }
         return new SimulatorOptions(host, positive("--server port", server.substring(colon + 1)), List.copyOf(agents),
-                behaviour, storage ? storageUrl : null);
+                behaviour, storage ? storageUrl : null, token);
     }
 
     private static String required(String name, String value) {

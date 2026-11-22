@@ -38,6 +38,7 @@ class SimulatedAgentCheckpointTest {
     private final Map<String, byte[]> files = new ConcurrentHashMap<>();
     private final Map<String, String> announcedSha = new ConcurrentHashMap<>();
     private volatile boolean refuseUploads;
+    private volatile String lastAuthorization;
     private HttpServer storage;
     private Server server;
     private ManagedChannel channel;
@@ -48,6 +49,7 @@ class SimulatedAgentCheckpointTest {
         storage = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         storage.createContext("/api/checkpoints/", exchange -> {
             String key = exchange.getRequestURI().getPath().substring("/api/checkpoints/".length());
+            lastAuthorization = exchange.getRequestHeaders().getFirst("Authorization");
             if ("PUT".equals(exchange.getRequestMethod())) {
                 byte[] body = exchange.getRequestBody().readAllBytes();
                 if (refuseUploads) {
@@ -68,7 +70,7 @@ class SimulatedAgentCheckpointTest {
         server = InProcessServerBuilder.forName(name).directExecutor().addService(gateway).build().start();
         channel = InProcessChannelBuilder.forName(name).directExecutor().build();
         agent = new SimulatedAgent(channel, AgentProfile.gpu("a1", "RTX 3060", 12_288), FAST,
-                new CheckpointClient("http://localhost:" + storage.getAddress().getPort()));
+                new CheckpointClient("http://localhost:" + storage.getAddress().getPort(), "labo-s3cr3t"));
         agent.start();
         gateway.next();
     }
@@ -117,6 +119,7 @@ class SimulatedAgentCheckpointTest {
                 .isEqualTo(CheckpointClient.sha256(files.get(key)))
                 .isEqualTo(announcedSha.get(key));
         assertThat(saved.getCheckpointSaved().getSizeBytes()).isEqualTo(files.get(key).length);
+        assertThat(lastAuthorization).as("shared agent token sent").isEqualTo("Bearer labo-s3cr3t");
     }
 
     @Test
