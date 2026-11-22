@@ -3,6 +3,6 @@
  *
  * <p>Couche <b>service-impl</b> : services CRUD (seuls propriétaires des repositories), services métier, intercepteurs et implémentation de la façade.</p>
  *
- * <p>Contenu : {@code JobCrudService} (seul utilisateur de {@code JobRepository}, appelle les intercepteurs), {@link tn.eniso.computehive.modules.jobs.service.impl.JobsModuleImpl} (façade), {@code JobCancelledPublisher} (intercepteur AFTER_UPDATE : publie {@code jobs.job-cancelled}). À venir : notification de fin de job via l'extension {@code notifications-api}.</p>
+ * <p>Contenu : {@code JobCrudService} (seul utilisateur de {@code JobRepository}, appelle les intercepteurs), {@link tn.eniso.computehive.modules.jobs.service.impl.JobsModuleImpl} (façade), {@code JobCancelledPublisher} (intercepteur AFTER_UPDATE : publie {@code jobs.job-cancelled}), {@code JobFinishedNotifier} (intercepteur AFTER_UPDATE : prévient le propriétaire d'un job DONE ou FAILED via {@code notifications-api}).</p>
  */
 package tn.eniso.computehive.modules.jobs.service.impl;
