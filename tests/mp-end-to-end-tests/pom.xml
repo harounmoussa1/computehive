@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>tn.eniso.computehive</groupId>
+        <artifactId>tests</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mp-end-to-end-tests</artifactId>
+    <name>ComputeHive :: Tests :: M/P end-to-end</name>
+    <description>
+        Test de bout en bout du mode M/P : les jars d'app-main et d'app-scheduling tournent dans deux processus séparés,
+        avec PostgreSQL, Kafka et Mailpit (Testcontainers), et de faux agents gRPC. Ignoré sans Docker.
+    </description>
+
+    <properties>
+        <pyramid.banned.1>tn.eniso.computehive:*-service-impl</pyramid.banned.1>
+        <pyramid.banned.2>tn.eniso.computehive:*-dal-*</pyramid.banned.2>
+        <pyramid.banned.3>tn.eniso.computehive:driver-*</pyramid.banned.3>
+    </properties>
+
+    <dependencies>
+        <!-- Les deux applications testées, déclarées pour que Maven les construise avant ce module -->
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>app-main</artifactId>
+            <scope>test</scope>
+            <version>${project.version}</version>
+            <!-- Jar exécutable de Spring Boot : seul le fichier compte, pas ses dépendances -->
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>app-scheduling</artifactId>
+            <scope>test</scope>
+            <version>${project.version}</version>
+            <!-- Jar exécutable de Spring Boot : seul le fichier compte, pas ses dépendances -->
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- Le test joue l'agent et l'utilisateur : faux agents gRPC, et les vues JSON des façades -->
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>agent-simulator</artifactId>
+            <scope>test</scope>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>jobs-infra</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>machines-infra</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>quotas-infra</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>scheduling-infra</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- L'infrastructure du docker-compose, dans des conteneurs jetables -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>kafka</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Copie les deux jars exécutables dans target/apps, sans numéro de version -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-applications</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <includeArtifactIds>app-main,app-scheduling</includeArtifactIds>
+                            <excludeTransitive>true</excludeTransitive>
+                            <stripVersion>true</stripVersion>
+                            <outputDirectory>${project.build.directory}/apps</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <computehive.apps.dir>${project.build.directory}/apps</computehive.apps.dir>
+                        <computehive.logs.dir>${project.build.directory}/mp-logs</computehive.logs.dir>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
