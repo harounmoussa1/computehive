@@ -1,0 +1,48 @@
+# ComputeHive en M/P, processus principal (jobs, machines, quotas). Les valeurs ${VARIABLE:défaut} se surchargent
+# par variable d'environnement (docker-compose.yml).
+spring:
+  application:
+    name: computehive-main
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:computehive}
+    username: ${DB_USER:computehive}
+    password: ${DB_PASSWORD:computehive}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Les tables sont créées par les migrations Flyway de chaque module ; Hibernate vérifie seulement (ADR 0005).
+      ddl-auto: validate
+  flyway:
+    # Chaque module migre son propre schéma (ModuleMigrations) : ici jobs, machines et quotas seulement.
+    enabled: false
+
+server:
+  port: ${HTTP_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+computehive:
+  internal:
+    # Jeton entre app-main et app-scheduling (API /internal/**, ADR 0010). Obligatoire : sans lui, le proxy de
+    # scheduling refuse de démarrer.
+    token: ${COMPUTEHIVE_INTERNAL_TOKEN:}
+  remote:
+    scheduling:
+      url: ${SCHEDULING_URL:http://localhost:8081}
+  broker:
+    kafka:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      client-id: computehive-main
+  notifications:
+    email:
+      host: ${MAIL_HOST:localhost}
+      port: ${MAIL_PORT:1025}
+  machines:
+    heartbeat-interval: 10s
+    lease-ttl: 30s
+    detection-interval: 10s
+    startup-grace: 30s
