@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ComputeHive — tableau de bord</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2l12 7v14l-12 7-12-7V9z' fill='%232563eb'/%3E%3Cpath d='M16 9l6 3.5v7L16 23l-6-3.5v-7z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="dashboard/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2l12 7v14l-12 7-12-7V9z" class="logo-outer"/><path d="M16 9l6 3.5v7L16 23l-6-3.5v-7z" class="logo-inner"/></svg>
+    <div>
+      <h1>ComputeHive</h1>
+      <p>Ordonnanceur de calculs du laboratoire</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="live" id="live" aria-live="polite"><span class="dot"></span><span id="live-text">Connexion…</span></div>
+    <button id="new-job" class="btn primary" type="button">+ Nouveau job</button>
+  </div>
+</header>
+
+<div id="banner" class="banner" role="alert" hidden></div>
+
+<main>
+  <section class="kpis" id="kpis" aria-label="Indicateurs"></section>
+
+  <div class="grid">
+    <section class="card">
+      <div class="card-head">
+        <h2>Jobs</h2>
+        <div class="filters" id="filters" role="tablist" aria-label="Filtrer les jobs">
+          <button type="button" data-filter="all" class="active">Tous</button>
+          <button type="button" data-filter="active">En cours</button>
+          <button type="button" data-filter="done">Terminés</button>
+          <button type="button" data-filter="failed">Échecs et annulations</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="jobs">
+          <thead>
+          <tr><th>Job</th><th>Statut</th><th>Avancement</th><th>Loss</th><th>Machine</th><th>Checkpoint</th><th></th></tr>
+          </thead>
+          <tbody id="jobs-body"></tbody>
+        </table>
+      </div>
+      <p class="muted small" id="jobs-footer"></p>
+    </section>
+
+    <aside class="side">
+      <section class="card">
+        <div class="card-head"><h2>Machines</h2><span class="muted small" id="machines-count"></span></div>
+        <div id="machines" class="machines"></div>
+      </section>
+      <section class="card">
+        <div class="card-head"><h2>Consommation</h2><span class="muted small">qui a le moins consommé passe d'abord</span></div>
+        <ol id="ranking" class="ranking"></ol>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<aside id="drawer" class="drawer" aria-label="Détail du job" hidden>
+  <div class="drawer-head">
+    <div><h2 id="drawer-title">Job</h2><p class="muted small" id="drawer-sub"></p></div>
+    <button type="button" class="icon" id="drawer-close" aria-label="Fermer">✕</button>
+  </div>
+  <div id="drawer-body"></div>
+</aside>
+
+<dialog id="submit-dialog">
+  <form id="submit-form" method="dialog">
+    <h2>Nouveau job</h2>
+    <p class="muted small">Le serveur le place sur un PC compatible dès qu'il y en a un de libre.</p>
+    <fieldset>
+      <legend>Vous</legend>
+      <label>Identifiant<input name="userId" required maxlength="64" placeholder="u-1"></label>
+      <label>Nom<input name="userName" maxlength="100" placeholder="Haroun"></label>
+    </fieldset>
+    <fieldset>
+      <legend>Entraînement</legend>
+      <label class="wide">Nom du job<input name="jobName" required maxlength="255" placeholder="mnist-lr-0.01"></label>
+      <label>Type<select name="type" id="job-types"></select></label>
+      <label>Epochs<input name="epochs" type="number" min="1" max="1000" value="10" required></label>
+      <label>Learning rate<input name="learningRate" type="number" step="any" min="0" value="0.01" required></label>
+      <label>Batch size<input name="batchSize" type="number" min="1" value="64" required></label>
+    </fieldset>
+    <fieldset>
+      <legend>Machine requise</legend>
+      <label class="check"><input name="gpu" type="checkbox" checked> GPU NVIDIA</label>
+      <label>Mémoire GPU minimale (Mo)<input name="minGpuMemoryMb" type="number" min="0" step="512" value="4096"></label>
+    </fieldset>
+    <p class="form-error" id="submit-error" hidden></p>
+    <div class="actions">
+      <button type="button" class="btn" id="submit-cancel">Annuler</button>
+      <button type="submit" class="btn primary">Soumettre</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script src="dashboard/app.js"></script>
+</body>
+</html>

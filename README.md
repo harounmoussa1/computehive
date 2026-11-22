@@ -42,12 +42,15 @@ Le même code tourne de deux façons ; seul l'assemblage change :
 
   Le profil `demo` ajoute deux faux PC GPU. `docker compose kill agent-a` simule la panne de l'un d'eux.
 
+Le **tableau de bord** s'ouvre à la racine : `http://localhost:8080/` (jobs en direct, PC, consommation ; soumettre
+ou annuler un job).
+
 ## Organisation
 
 | Dossier | Contenu |
 |---|---|
 | `core/` | Socle commun : références étendues, exceptions, intercepteurs, corrélation des logs, client des modules distants |
-| `modules/` | Modules métier `jobs`, `machines`, `scheduling`, `quotas`, chacun en pyramide DAL → Service → WS |
+| `modules/` | Modules métier `jobs`, `machines`, `scheduling`, `quotas`, chacun en pyramide DAL → Service → WS ; `dashboard` (tableau de bord, sans données) |
 | `extensions/` | Contrats techniques : messagerie, notifications, stockage des checkpoints |
 | `drivers/` | Implémentations de ces contrats (mémoire, Kafka, log, e-mail, disque local, stockage distant) |
 | `apps/` | Assemblages : `app-modulith` (M/1), `app-main` + `app-scheduling` (M/P) |

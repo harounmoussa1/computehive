@@ -19,6 +19,7 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
+import tn.eniso.computehive.modules.dashboard.infra.JobDetails;
 import tn.eniso.computehive.modules.jobs.infra.JobInfo;
 import tn.eniso.computehive.modules.jobs.infra.JobStatus;
 import tn.eniso.computehive.modules.machines.infra.MachineInfo;
@@ -171,6 +172,13 @@ class MpEndToEndIT {
         assertThat(attempts.get(1).resumeFrom().epoch()).as("resumed from the checkpoint of epoch 2").isEqualTo(2);
         MachineInfo crashed = get(main, "/api/machines/" + attempts.get(0).machine().id(), null, MachineInfo.class);
         assertThat(crashed.status()).as("declared dead by app-main").isEqualTo(MachineStatus.DEAD);
+
+        // Le tableau de bord d'app-main lit ces tentatives dans app-scheduling, par le proxy de scheduling.
+        JobDetails onDashboard = get(main, "/api/dashboard/jobs/" + submitted.id(), null, JobDetails.class);
+        assertThat(onDashboard.attemptsAvailable()).isTrue();
+        assertThat(onDashboard.attempts()).extracting(AssignmentInfo::status)
+                .containsExactly(AssignmentStatus.LOST, AssignmentStatus.COMPLETED);
+        assertThat(body(main, "/", null)).as("dashboard page").contains("ComputeHive — tableau de bord");
 
         // Le checkpoint de reprise a été déposé dans app-scheduling par pc-a, puis relu par pc-b.
         HttpResponse<byte[]> checkpoint = HTTP.send(HttpRequest.newBuilder(URI.create(scheduling.baseUrl()

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>tn.eniso.computehive</groupId>
+        <artifactId>dashboard</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>dashboard-ws-rest</artifactId>
+    <name>ComputeHive :: Dashboard :: WS REST</name>
+    <description>API REST du tableau de bord et page web (HTML, CSS, JavaScript sans outil de build).</description>
+
+    <properties>
+        <pyramid.banned.1>tn.eniso.computehive:*-service-impl</pyramid.banned.1>
+        <pyramid.banned.2>tn.eniso.computehive:*-dal-*</pyramid.banned.2>
+        <pyramid.banned.3>tn.eniso.computehive:*-cli</pyramid.banned.3>
+        <pyramid.banned.4>tn.eniso.computehive:driver-*</pyramid.banned.4>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>dashboard-service-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>core-ws-rest</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.jayway.jsonpath</groupId>
+            <artifactId>json-path</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>hamcrest</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

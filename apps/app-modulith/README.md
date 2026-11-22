@@ -35,7 +35,8 @@ Il tient dans `ModulithApplication` et dans le `pom.xml` :
    DB_PORT=5433 java -jar apps/app-modulith/target/app-modulith.jar
    ```
 
-   Logs JSON (avec `correlationId`, `jobId`, `workerId`) : ajouter `SPRING_PROFILES_ACTIVE=json`.
+   Tableau de bord : `http://localhost:8080/`. Logs JSON (avec `correlationId`, `jobId`, `workerId`) : ajouter
+   `SPRING_PROFILES_ACTIVE=json`.
 
 | Variable | Défaut |
 |---|---|

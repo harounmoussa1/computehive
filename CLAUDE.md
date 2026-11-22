@@ -80,7 +80,8 @@ computehive/
 │   ├── jobs/                  infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, service-rest-cli
 │   ├── machines/              infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, service-rest-cli
 │   ├── scheduling/            infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, ws-grpc, service-rest-cli
-│   └── quotas/                infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, service-rest-cli
+│   ├── quotas/                infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, service-rest-cli
+│   └── dashboard/             infra, service-api, service-impl, ws-rest (+ page web) : sans DAL, lit les façades
 ├── extensions/                contrats techniques (les modules ne dépendent que de ça)
 │   ├── messaging-broker/      messaging-broker-api
 │   ├── notifications/         notifications-api
@@ -133,6 +134,14 @@ il génère son code depuis le même `worker.proto`.
 - `ws-grpc` : traduit les messages du stream en appels de la façade `SchedulingModule` uniquement
   (c'est `scheduling-service-impl` qui appelle ensuite `MachinesModule`, `JobsModule`…). Aucune logique métier.
 
+### dashboard
+- Module sans données : la façade `DashboardModule` compose la vue d'ensemble à partir des façades de jobs,
+  machines, quotas et scheduling (façade → façade). Ne modifie rien.
+- REST : `GET /api/dashboard` (une requête par rafraîchissement), `GET /api/dashboard/jobs/{id}` (job + tentatives ;
+  `attemptsAvailable=false` si scheduling est injoignable en M/P).
+- Page web statique (`dashboard-ws-rest/src/main/resources/static`), servie à la racine d'`app-modulith` et
+  d'`app-main`, rafraîchie toutes les 2 s ; HTML/CSS/JS sans bibliothèque ni build ; tout texte échappé.
+
 ### quotas
 - Intercepteur `AFTER_UPDATE` sur `Job` : passage à `DONE` → ajout de la durée GPU à la consommation.
 - Facade : `priorityOf(userId)` ; plus de consommation = priorité plus basse.
@@ -183,8 +192,8 @@ Le job simulé de secours affiche les mêmes lignes sans PyTorch.
 5. ✅ `scheduling` + gateway gRPC + agent-simulator.
 6. ✅ Réattribution + fencing (ADR 0007) ; `quotas` ; notifications.
 7. ✅ **Jalon : serveur complet, testé avec le faux agent** (`app-modulith`, `ModulithEndToEndIT`).
-8. Stockage des checkpoints + Resilience4j ✅ ; jeton des agents (ADR 0009) ✅ ; assemblage M/P (ADR 0010) ✅ ;
-   tableau de bord.
+8. ✅ Stockage des checkpoints + Resilience4j ; jeton des agents (ADR 0009) ; assemblage M/P (ADR 0010) ;
+   tableau de bord (module `dashboard`, ADR 0011).
 9. Intégration avec l'agent réel du binôme ; tests de bout en bout ; documentation.
 
 ## Conventions de code (socle)
