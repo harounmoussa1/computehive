@@ -1,0 +1,40 @@
+# ComputeHive en M/1 (modulith). Les valeurs ${VARIABLE:défaut} se surchargent par variable d'environnement.
+spring:
+  application:
+    name: computehive-modulith
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:computehive}
+    username: ${DB_USER:computehive}
+    password: ${DB_PASSWORD:computehive}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Les tables sont créées par les migrations Flyway de chaque module ; Hibernate vérifie seulement (ADR 0005).
+      ddl-auto: validate
+  flyway:
+    # Chaque module migre son propre schéma (ModuleMigrations) : la migration globale de Spring Boot est inutile.
+    enabled: false
+
+server:
+  port: ${HTTP_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+computehive:
+  grpc:
+    port: ${GRPC_PORT:9090}
+  machines:
+    heartbeat-interval: 10s
+    lease-ttl: 30s
+    detection-interval: 10s
+    startup-grace: 30s
+  scheduling:
+    placement-interval: 2s
+    launch-ack-timeout: 15s
+    max-launch-sends: 4
+    reconciliation-interval: 15s
+    lost-job-grace: 30s
