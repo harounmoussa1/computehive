@@ -176,7 +176,7 @@ Le job simulé de secours affiche les mêmes lignes sans PyTorch.
 4. ✅ Extension messagerie (driver mémoire, puis Kafka) ; `machines` publie `MachineDead` (ADR 0006).
 5. ✅ `scheduling` + gateway gRPC + agent-simulator.
 6. ✅ Réattribution + fencing (ADR 0007) ; `quotas` ; notifications.
-7. **Jalon : serveur complet, testé avec le faux agent.**
+7. ✅ **Jalon : serveur complet, testé avec le faux agent** (`app-modulith`, `ModulithEndToEndIT`).
 8. Stockage des checkpoints + Resilience4j ; assemblage M/1 et M/P ; tableau de bord.
 9. Intégration avec l'agent réel du binôme ; tests de bout en bout ; documentation.
 

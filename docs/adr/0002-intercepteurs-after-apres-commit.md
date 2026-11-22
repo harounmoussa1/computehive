@@ -53,3 +53,12 @@ PostgreSQL avec Spring Data JPA et Hibernate.
   alors que l'écriture est validée.
 - `@TransactionalEventListener` de Spring : même effet, mais mécanisme implicite et différent
   de l'API d'intercepteurs décrite par le whitepaper.
+
+### Complément (2026-11-22) : intercepteurs chargés au premier événement
+
+Un intercepteur écrit souvent par le service CRUD de son module (ex. `quotas`), lequel dépend du
+distributeur. Charger tous les intercepteurs à la création du registre formait donc un cycle au démarrage
+de l'application assemblée (distributeur → registre → intercepteur → service CRUD → distributeur).
+`InterceptorRegistry` les recherche au premier événement, une fois l'application démarrée
+(`InterceptorRegistryTest` reproduit le cas avec un vrai contexte Spring).
+
