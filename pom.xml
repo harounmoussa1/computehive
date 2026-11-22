@@ -36,6 +36,8 @@
         <testcontainers.version>1.21.4</testcontainers.version>
         <!-- Logs JSON (Logback), avec les champs du MDC : correlationId, jobId, workerId -->
         <logstash-logback-encoder.version>8.0</logstash-logback-encoder.version>
+        <!-- Circuit breaker et retries (stockage distant des checkpoints, appels entre applications en M/P) -->
+        <resilience4j.version>2.2.0</resilience4j.version>
         <tomcat-annotations-api.version>6.0.53</tomcat-annotations-api.version>
 
         <os-maven-plugin.version>1.7.1</os-maven-plugin.version>
@@ -99,6 +101,13 @@
             </dependency>
 
             <!-- Sous-projets internes -->
+            <dependency>
+                <groupId>io.github.resilience4j</groupId>
+                <artifactId>resilience4j-bom</artifactId>
+                <version>${resilience4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>net.logstash.logback</groupId>
                 <artifactId>logstash-logback-encoder</artifactId>

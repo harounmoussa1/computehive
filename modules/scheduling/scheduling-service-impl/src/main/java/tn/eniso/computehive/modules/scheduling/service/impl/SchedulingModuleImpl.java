@@ -59,11 +59,13 @@ public class SchedulingModuleImpl implements SchedulingModule {
     private final Fencing fencing;
     private final AttemptLifecycle lifecycle;
     private final Reassignment reassignment;
+    private final CheckpointVerifier checkpoints;
     private final Clock clock;
 
     public SchedulingModuleImpl(MachinesModule machines, JobsModule jobs, AssignmentCrudService assignments,
                                 ProcessedAgentMessageCrudService processedMessages, Fencing fencing,
-                                AttemptLifecycle lifecycle, Reassignment reassignment, Clock clock) {
+                                AttemptLifecycle lifecycle, Reassignment reassignment, CheckpointVerifier checkpoints,
+                                Clock clock) {
         this.machines = machines;
         this.jobs = jobs;
         this.assignments = assignments;
@@ -71,6 +73,7 @@ public class SchedulingModuleImpl implements SchedulingModule {
         this.fencing = fencing;
         this.lifecycle = lifecycle;
         this.reassignment = reassignment;
+        this.checkpoints = checkpoints;
         this.clock = clock;
     }
 
@@ -111,7 +114,7 @@ public class SchedulingModuleImpl implements SchedulingModule {
         });
     }
 
-    /** La vérification du SHA-256 auprès du stockage des checkpoints viendra avec l'extension checkpoint-storage. */
+    /** Le checkpoint ne devient officiel qu'après vérification du fichier déposé ({@link CheckpointVerifier}). */
     @Override
     public MessageOutcome reportCheckpoint(String machineId, String messageId, CheckpointReport report) {
         Checks.requireNonNull(report, "report");
@@ -119,6 +122,7 @@ public class SchedulingModuleImpl implements SchedulingModule {
             if (!lifecycle.ensureRunning(assignment)) {
                 return false;
             }
+            checkpoints.verify(report);
             jobs.recordCheckpoint(report.jobId(),
                     new JobCheckpoint(report.epoch(), report.storageKey(), report.sha256()));
             return true;

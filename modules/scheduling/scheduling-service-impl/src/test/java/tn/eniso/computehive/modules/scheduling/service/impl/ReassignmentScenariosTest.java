@@ -44,6 +44,7 @@ class ReassignmentScenariosTest {
     }
 
     private void checkpoint(String machineId, JobInfo job, int epoch) {
+        f.checkpointStore.uploaded(job.id(), 1, epoch, SHA);
         f.scheduling.reportCheckpoint(machineId, f.messageId(),
                 new CheckpointReport(job.id(), 1, epoch, job.id() + "/attempts/1/epochs/" + epoch, SHA, 1_024));
     }

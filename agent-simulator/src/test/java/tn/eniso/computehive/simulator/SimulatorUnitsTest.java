@@ -24,7 +24,7 @@ class SimulatorUnitsTest {
     }
 
     @Test
-    void checkpointsAreKeyedByAttemptAndHaveAStableHash() {
+    void checkpointsAreKeyedByAttemptAndHaveAStableContent() {
         SimulatedTraining training = new SimulatedTraining("j-7", 2, 10, 0.01, 4);
         SimulatedTraining sameRun = new SimulatedTraining("j-7", 2, 10, 0.01, 4);
         training.nextEpoch();
@@ -32,9 +32,10 @@ class SimulatorUnitsTest {
 
         assertThat(training.epoch()).as("resumes after epoch 4").isEqualTo(5);
         assertThat(training.checkpointKey()).isEqualTo("j-7/attempts/2/epochs/5");
-        assertThat(training.checkpointSha256())
+        assertThat(CheckpointClient.sha256(training.checkpointContent()))
                 .matches("[0-9a-f]{64}")
-                .isEqualTo(sameRun.checkpointSha256());
+                .isEqualTo(CheckpointClient.sha256(sameRun.checkpointContent()));
+        assertThat(training.checkpointContent().length).isGreaterThan(10_000);
         assertThat(training.lastCheckpointEpoch()).isEqualTo(4);
     }
 
@@ -49,6 +50,7 @@ class SimulatorUnitsTest {
             assertThat(agent.hasGpu()).isTrue();
         });
         assertThat(options.behaviour()).isEqualTo(Behaviour.normal());
+        assertThat(options.storageUrl()).isEqualTo("http://localhost:8080");
     }
 
     @Test
@@ -63,6 +65,10 @@ class SimulatorUnitsTest {
         assertThat(options.behaviour().epochDuration()).isEqualTo(Duration.ofMillis(200));
         assertThat(options.behaviour().checkpointEvery()).isZero();
         assertThat(options.behaviour().crashAtEpoch()).isEqualTo(3);
+        assertThat(options.storageUrl()).as("derived from the server host").isEqualTo("http://server:8080");
+        assertThat(SimulatorOptions.parse("--no-storage").storageUrl()).isNull();
+        assertThat(SimulatorOptions.parse("--storage-url=http://storage:9000").storageUrl())
+                .isEqualTo("http://storage:9000");
     }
 
     @Test

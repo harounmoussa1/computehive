@@ -1,13 +1,10 @@
 package tn.eniso.computehive.simulator;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 
 /**
  * Entraînement simulé d'un job, sans PyTorch : une courbe de perte qui décroît avec les epochs, une
- * précision finale, et des checkpoints dont le contenu est fictif mais l'empreinte SHA-256 réelle.
+ * précision finale, et des checkpoints au contenu fictif.
  * Déterministe : deux exécutions identiques donnent les mêmes valeurs.
  */
 final class SimulatedTraining {
@@ -59,13 +56,10 @@ final class SimulatedTraining {
         return jobId + "/attempts/" + attemptId + "/epochs/" + epoch;
     }
 
-    String checkpointSha256() {
-        try {
-            byte[] content = ("simulated checkpoint " + checkpointKey()).getBytes(StandardCharsets.UTF_8);
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 is always available", e);
-        }
+    /** Contenu fictif du checkpoint de l'epoch courante (environ 16 Ko), différent pour chaque clé. */
+    byte[] checkpointContent() {
+        String line = "simulated checkpoint " + checkpointKey() + " loss=" + loss() + System.lineSeparator();
+        return line.repeat(Math.max(1, 16_384 / line.length())).getBytes(StandardCharsets.UTF_8);
     }
 
     void recordCheckpoint() {

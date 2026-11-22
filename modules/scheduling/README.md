@@ -46,7 +46,7 @@ qui a le moins consommé passe d'abord), puis du plus ancien au plus récent :
 | `Heartbeat` | prolongation du bail, puis resynchronisation |
 | `CommandAck` | accepté : tentative et job `RUNNING` ; refusé : tentative `REJECTED`, machine libérée, job replacé ailleurs |
 | `Progress` | avancement du job |
-| `CheckpointSaved` | nouveau checkpoint officiel du job |
+| `CheckpointSaved` | nouveau checkpoint officiel du job, **après vérification** (`CheckpointVerifier`, ADR 0008) : la clé correspond à la tentative, le fichier a été déposé, son SHA-256 est celui annoncé |
 | `Finished` | job `DONE` ou `FAILED`, tentative terminée, machine libérée ; `STOPPED` libère seulement la machine |
 
 - **Resynchronisation** : l'agent déclare ses jobs en cours ; toute tentative qui n'est pas la tentative
@@ -142,7 +142,7 @@ dans `scheduling-dal-jpa/src/main/resources/db/migration/scheduling` (voir ADR 0
 | `scheduling-dal-api` | `AssignmentRepository`, `ProcessedAgentMessageRepository` |
 | `scheduling-dal-jpa` | entités JPA, adaptateurs, migrations |
 | `scheduling-service-api` | façade `SchedulingModule`, port `AgentChannel` |
-| `scheduling-service-impl` | services CRUD, `SchedulingModuleImpl`, `JobPlacement`, `LaunchWatchdog`, `Fencing`, `AttemptLifecycle`, `Reassignment`, `SchedulingSubscriptions`, `Reconciler` |
+| `scheduling-service-impl` | services CRUD, `SchedulingModuleImpl`, `JobPlacement`, `LaunchWatchdog`, `Fencing`, `CheckpointVerifier`, `AttemptLifecycle`, `Reassignment`, `SchedulingSubscriptions`, `Reconciler` |
 | `scheduling-ws-grpc` | `WorkerGatewayService`, `ProtoTranslator`, `AgentSessionRegistry` (implémente `AgentChannel`), `WorkerGatewayServer` |
 | `scheduling-ws-rest`, `scheduling-service-rest-cli` | réservés au mode M/P (étape d'assemblage) |
 
@@ -156,8 +156,5 @@ dans `scheduling-dal-jpa/src/main/resources/db/migration/scheduling` (voir ADR 0
 | `WorkerGatewayServiceTest` | porte gRPC (serveur en mémoire, faux agent) : traduction, ordres, inscription, reconnexion, erreurs |
 | `WorkerGatewayServerTest` | vrai serveur Netty sur un port libre : connexion d'un agent par le réseau, arrêt propre |
 | `ReassignmentScenariosTest` | 13 scénarios : panne de machine et reprise depuis le checkpoint, ancienne machine écartée par le fencing, job disparu, annulation, réconciliation après un événement perdu, abonnements |
-| `SchedulingScenariosTest` | 27 scénarios : placement (dont la priorité par quotas), refus, accusé perdu, message rejoué, tentative périmée, reprise depuis un checkpoint, resynchronisation, annulation, renvoi puis abandon |
+| `SchedulingScenariosTest` | 30 scénarios : placement (dont la priorité par quotas), checkpoint non déposé, corrompu ou d'une autre tentative refusé, refus, accusé perdu, message rejoué, tentative périmée, reprise depuis un checkpoint, resynchronisation, annulation, renvoi puis abandon |
 
-## À venir
-
-- Vérification du SHA-256 d'un checkpoint auprès de l'extension `checkpoint-storage` (étape 8).

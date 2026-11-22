@@ -186,6 +186,7 @@ class SchedulingScenariosTest {
         JobInfo job = runningJobOn(pc);
 
         f.scheduling.reportProgress(pc, f.messageId(), new ProgressReport(job.id(), 1, 3, 10, 0.42, 30));
+        f.checkpointStore.uploaded(job.id(), 1, 3, SHA);
         f.scheduling.reportCheckpoint(pc, f.messageId(),
                 new CheckpointReport(job.id(), 1, 3, job.id() + "/attempts/1/epochs/3", SHA, 1_024));
 
@@ -193,6 +194,43 @@ class SchedulingScenariosTest {
         assertThat(updated.currentEpoch()).isEqualTo(3);
         assertThat(updated.lastLoss()).isEqualTo(0.42);
         assertThat(updated.lastCheckpointEpoch()).isEqualTo(3);
+    }
+
+    @Test
+    void aCheckpointThatWasNeverUploadedIsNotMadeOfficial() {
+        String pc = f.connectGpuAgent("a1");
+        JobInfo job = runningJobOn(pc);
+
+        assertThatThrownBy(() -> f.scheduling.reportCheckpoint(pc, f.messageId(),
+                new CheckpointReport(job.id(), 1, 3, job.id() + "/attempts/1/epochs/3", SHA, 1_024)))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("never uploaded");
+        assertThat(f.jobs.get(job.id()).lastCheckpoint()).isNull();
+    }
+
+    @Test
+    void aCorruptedCheckpointIsNotMadeOfficial() {
+        String pc = f.connectGpuAgent("a1");
+        JobInfo job = runningJobOn(pc);
+        f.checkpointStore.uploaded(job.id(), 1, 3, "e".repeat(64));
+
+        assertThatThrownBy(() -> f.scheduling.reportCheckpoint(pc, f.messageId(),
+                new CheckpointReport(job.id(), 1, 3, job.id() + "/attempts/1/epochs/3", SHA, 1_024)))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("corrupted");
+        assertThat(f.jobs.get(job.id()).lastCheckpoint()).isNull();
+    }
+
+    @Test
+    void aCheckpointCannotPointToTheFileOfAnotherAttempt() {
+        String pc = f.connectGpuAgent("a1");
+        JobInfo job = runningJobOn(pc);
+        f.checkpointStore.uploaded(job.id(), 7, 3, SHA);
+
+        assertThatThrownBy(() -> f.scheduling.reportCheckpoint(pc, f.messageId(),
+                new CheckpointReport(job.id(), 1, 3, job.id() + "/attempts/7/epochs/3", SHA, 1_024)))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("does not match");
     }
 
     @Test
@@ -291,6 +329,7 @@ class SchedulingScenariosTest {
     void aJobResumesFromItsCheckpointAndTheOldAttemptIsFenced() {
         String pc12 = f.connectGpuAgent("a12");
         JobInfo job = runningJobOn(pc12);
+        f.checkpointStore.uploaded(job.id(), 1, 4, SHA);
         f.scheduling.reportCheckpoint(pc12, f.messageId(),
                 new CheckpointReport(job.id(), 1, 4, job.id() + "/attempts/1/epochs/4", SHA, 1_024));
         // PC-12 est perdu (la réattribution automatique sur MachineDead arrive à l'étape 6).

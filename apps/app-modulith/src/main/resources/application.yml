@@ -25,6 +25,10 @@ management:
         include: health,info
 
 computehive:
+  checkpoints:
+    local:
+      # Dossier des checkpoints déposés par les agents (un volume Docker en production).
+      directory: ${CHECKPOINT_DIR:data/checkpoints}
   grpc:
     port: ${GRPC_PORT:9090}
   machines:
