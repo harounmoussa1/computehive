@@ -56,6 +56,14 @@ sans que `jobs` dépende de `quotas`.
 
 Publié par l'intercepteur `JobCancelledPublisher` (`AFTER_UPDATE`, donc après le commit ; ADR 0006).
 
+## Notifications
+
+`JobFinishedNotifier` (intercepteur `AFTER_UPDATE`) prévient le propriétaire par l'extension
+`notifications-api` quand son job passe à `DONE` (précision, machine, durée) ou à `FAILED` (cause, dernier
+checkpoint). Une annulation n'est pas notifiée : c'est l'utilisateur qui l'a demandée. Le canal dépend du
+driver assemblé : logs (`driver-notif-log`) ou e-mail vers Mailpit (`driver-notif-email`). Une notification
+qui échoue est journalisée et ne remet jamais en cause la fin du job.
+
 ## API REST
 
 | Requête | Effet | Réponses |
@@ -104,7 +112,7 @@ Schéma PostgreSQL `jobs`, table `job`, migrations Flyway dans
 | `jobs-dal-api` | `JobRepository` |
 | `jobs-dal-jpa` | `JpaJob`, `JpaJobRepository`, migrations |
 | `jobs-service-api` | Façade `JobsModule`, topics publiés `JobsEvents` |
-| `jobs-service-impl` | `JobCrudService`, `JobsModuleImpl`, `JobCancelledPublisher` |
+| `jobs-service-impl` | `JobCrudService`, `JobsModuleImpl`, `JobCancelledPublisher`, `JobFinishedNotifier` |
 | `jobs-ws-rest` | `JobsController`, `SubmitJobRequest` |
 | `jobs-service-rest-cli` | Réservé au mode M/P (étape d'assemblage) |
 
@@ -116,12 +124,12 @@ Schéma PostgreSQL `jobs`, table `job`, migrations Flyway dans
 | `JpaJobRepositoryIT` | migrations, correspondance entité ↔ table, filtres, verrouillage optimiste (PostgreSQL, Testcontainers) |
 | `JobCrudServiceTest` | appel des intercepteurs autour de chaque écriture |
 | `JobsModuleImplTest` | cycle de vie complet avec panne et reprise, conflits, checkpoint rejoué |
+| `JobFinishedNotifierTest` | notification d'un job `DONE` ou `FAILED`, et d'eux seuls |
 | `JobCancelledPublisherTest` | publication de `jobs.job-cancelled`, une seule fois par annulation |
 | `JobsControllerTest` | codes HTTP, `Location`, en-têtes d'identité, filtres |
 
 ## À venir
 
-- Notification de fin de job via l'extension `notifications-api` (étape 6).
 - Seul le propriétaire pourra annuler son job, quand une authentification existera.
 - Conflit de version (`OptimisticLockingFailureException`) traduit en HTTP 409 par `core-ws-rest`.
 - `jobs-service-rest-cli` (étape assemblage M/P).
