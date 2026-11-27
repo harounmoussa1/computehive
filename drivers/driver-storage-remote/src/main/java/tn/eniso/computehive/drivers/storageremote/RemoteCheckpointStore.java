@@ -14,23 +14,26 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tn.eniso.computehive.core.infra.exception.NotFoundException;
-import tn.eniso.computehive.drivers.storageremote.SimulatedRemoteBucket.RemoteObject;
-import tn.eniso.computehive.drivers.storageremote.SimulatedRemoteBucket.RemoteUnavailableException;
+import tn.eniso.computehive.drivers.storageremote.RemoteBucket.ObjectInfo;
+import tn.eniso.computehive.drivers.storageremote.RemoteBucket.RemoteUnavailableException;
 import tn.eniso.computehive.extensions.checkpoints.api.CheckpointKey;
 import tn.eniso.computehive.extensions.checkpoints.api.CheckpointStorageException;
 import tn.eniso.computehive.extensions.checkpoints.api.CheckpointStore;
 import tn.eniso.computehive.extensions.checkpoints.api.Sha256;
 import tn.eniso.computehive.extensions.checkpoints.api.StoredCheckpoint;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Clock;
 import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
- * Checkpoints sur un stockage distant (simulé), protégé par Resilience4j.
+ * Checkpoints sur un stockage objet distant ({@link RemoteBucket} : compatible S3 en déploiement, simulé dans les tests),
+ * protégé par Resilience4j.
  *
  * <ul>
  *   <li><b>Retry</b> : une panne passagère est réessayée, avec une attente qui double à chaque essai ;</li>
@@ -42,13 +45,16 @@ import java.util.function.Supplier;
  *
  * <p>Le retry entoure le circuit : chaque essai compte pour le circuit, et un circuit ouvert n'est pas réessayé.
  * Un échec définitif devient une {@link CheckpointStorageException}.</p>
+ *
+ * <p>Le contenu reçu est d'abord écrit dans un fichier temporaire, en calculant son empreinte : la mémoire ne
+ * dépend pas de la taille du fichier, et chaque nouvel essai renvoie exactement les mêmes octets.</p>
  */
 public class RemoteCheckpointStore implements CheckpointStore {
 
     private static final Logger log = LoggerFactory.getLogger(RemoteCheckpointStore.class);
     private static final String NAME = "checkpoint-storage";
 
-    private final SimulatedRemoteBucket bucket;
+    private final RemoteBucket bucket;
     private final Clock clock;
     /** Registres d'un seul élément : c'est par eux que Resilience4j publie ses métriques ({@link #bindTo}). */
     private final RetryRegistry retries;
@@ -56,7 +62,7 @@ public class RemoteCheckpointStore implements CheckpointStore {
     private final Retry retry;
     private final CircuitBreaker circuit;
 
-    public RemoteCheckpointStore(SimulatedRemoteBucket bucket, RemoteStorageProperties properties, Clock clock) {
+    public RemoteCheckpointStore(RemoteBucket bucket, RemoteStorageProperties properties, Clock clock) {
         this.bucket = bucket;
         this.clock = clock;
         this.circuits = CircuitBreakerRegistry.of(CircuitBreakerConfig.custom()
@@ -83,36 +89,39 @@ public class RemoteCheckpointStore implements CheckpointStore {
                         event.getWaitInterval()));
     }
 
-    /** Le contenu est lu une fois (calcul de l'empreinte), puis envoyé ; un nouvel essai renvoie les mêmes octets. */
     @Override
     public StoredCheckpoint store(CheckpointKey key, InputStream content) {
-        byte[] bytes;
-        String sha256;
-        try (Sha256.DigestingStream digesting = new Sha256.DigestingStream(content)) {
-            bytes = digesting.readAllBytes();
-            sha256 = digesting.sha256();
+        Path spool = null;
+        try {
+            spool = Files.createTempFile("computehive-checkpoint-", ".part");
+            ObjectInfo info;
+            try (Sha256.DigestingStream digesting = new Sha256.DigestingStream(content)) {
+                Files.copy(digesting, spool, StandardCopyOption.REPLACE_EXISTING);
+                info = new ObjectInfo(digesting.sha256(), digesting.size(), clock.instant());
+            }
+            Path file = spool;
+            resilient("store " + key, () -> {
+                bucket.put(key.path(), file, info);
+                return null;
+            });
+            log.info("Checkpoint {} stored remotely ({} bytes, sha256 {})", key, info.sizeBytes(), info.sha256());
+            return toStored(key, info);
         } catch (IOException e) {
             throw new CheckpointStorageException("Checkpoint " + key + " could not be received", e);
+        } finally {
+            deleteQuietly(spool);
         }
-        RemoteObject object = new RemoteObject(bytes, sha256, clock.instant());
-        resilient("store " + key, () -> {
-            bucket.put(key.path(), object);
-            return null;
-        });
-        log.info("Checkpoint {} stored remotely ({} bytes)", key, bytes.length);
-        return toStored(key, object);
     }
 
     @Override
     public Optional<StoredCheckpoint> find(CheckpointKey key) {
-        return resilient("find " + key, () -> bucket.get(key.path())).map(object -> toStored(key, object));
+        return resilient("find " + key, () -> bucket.stat(key.path())).map(info -> toStored(key, info));
     }
 
     @Override
     public InputStream open(CheckpointKey key) {
-        RemoteObject object = resilient("open " + key, () -> bucket.get(key.path()))
+        return resilient("open " + key, () -> bucket.open(key.path()))
                 .orElseThrow(() -> new NotFoundException("Checkpoint", key.path()));
-        return new ByteArrayInputStream(object.content());
     }
 
     /** État du circuit ({@code CLOSED}, {@code OPEN}, {@code HALF_OPEN}), pour la supervision et les tests. */
@@ -140,7 +149,18 @@ public class RemoteCheckpointStore implements CheckpointStore {
         }
     }
 
-    private static StoredCheckpoint toStored(CheckpointKey key, RemoteObject object) {
-        return new StoredCheckpoint(key, object.sha256(), object.content().length, object.storedAt());
+    private static StoredCheckpoint toStored(CheckpointKey key, ObjectInfo info) {
+        return new StoredCheckpoint(key, info.sha256(), info.sizeBytes(), info.storedAt());
+    }
+
+    private static void deleteQuietly(Path file) {
+        if (file == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            log.warn("Temporary file {} could not be deleted", file, e);
+        }
     }
 }

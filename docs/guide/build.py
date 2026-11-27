@@ -183,7 +183,7 @@ de jobs envoie la notification. Les intercepteurs <code>AFTER_*</code> s'exécut
 <tr><th>Extension (contrat)</th><th>Drivers</th><th>Utilisée par</th></tr>
 <tr><td><code>messaging-broker-api</code></td><td>mémoire (M/1, tests) · Kafka (M/P)</td><td>machines et jobs publient, scheduling s'abonne</td></tr>
 <tr><td><code>notifications-api</code></td><td>logs · e-mail (Mailpit)</td><td>jobs (fin de job)</td></tr>
-<tr><td><code>checkpoint-storage-api</code></td><td>disque local · stockage distant simulé (Resilience4j)</td><td>API de dépôt des agents, vérification par scheduling</td></tr>
+<tr><td><code>checkpoint-storage-api</code></td><td>disque local · stockage S3 SeaweedFS (Resilience4j)</td><td>API de dépôt des agents, vérification par scheduling</td></tr>
 </table>
 <div class="box"><b>Façade ou extension ?</b> Une <b>façade</b> est le contrat d'un module métier (« que sait faire jobs ? »).
 Une <b>extension</b> est le contrat d'un outil technique (« comment publier un événement ? »). Les modules parlent

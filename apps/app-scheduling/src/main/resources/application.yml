@@ -55,7 +55,14 @@ computehive:
       client-id: computehive-scheduling
   checkpoints:
     remote:
-      # Stockage distant simulé (en mémoire) : latence et taux de pannes réglables pour la démo de Resilience4j.
+      # Stockage compatible S3 (SeaweedFS dans docker compose, ADR 0015). Sans adresse : stockage simulé en mémoire,
+      # perdu à l'arrêt (développement seulement).
+      s3:
+        endpoint: ${S3_ENDPOINT:}
+        access-key: ${S3_ACCESS_KEY:}
+        secret-key: ${S3_SECRET_KEY:}
+        bucket: ${S3_BUCKET:computehive}
+      # Stockage simulé seulement : latence et taux de pannes réglables pour la démo de Resilience4j.
       latency: ${CHECKPOINT_STORE_LATENCY:50ms}
       failure-rate: ${CHECKPOINT_STORE_FAILURE_RATE:0.0}
   grpc:

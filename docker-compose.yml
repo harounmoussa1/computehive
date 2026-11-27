@@ -1,7 +1,7 @@
 # ComputeHive en M/P sur le PC serveur : deux applications (app-main, app-scheduling), PostgreSQL, Kafka, Mailpit,
-# et la supervision : Prometheus et Grafana (ADR 0014).
+# le stockage de fichiers SeaweedFS (compatible S3, ADR 0015) et la supervision : Prometheus et Grafana (ADR 0014).
 #
-#   1. cp .env.example .env            puis choisir les deux jetons
+#   1. cp .env.example .env            puis choisir les jetons et les identifiants du stockage S3
 #   2. ./mvnw package -DskipTests      construit les jars copiés dans les images
 #   3. docker compose up --build -d    démarre le serveur
 #      docker compose --profile demo up --build -d   … avec deux faux agents GPU (démo sans vrai PC)
@@ -67,6 +67,31 @@ services:
     ports:
       - "8025:8025"
 
+  seaweedfs:
+    # Stockage de fichiers compatible S3 (checkpoints, puis codes et datasets) : gratuit, auto-hébergé, persistant
+    # (volume seaweedfs-data). Le fichier d'identités S3 est écrit au démarrage à partir des identifiants de .env.
+    image: chrislusf/seaweedfs:3.80
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?définir S3_ACCESS_KEY dans .env}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?définir S3_SECRET_KEY dans .env}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        printf '{"identities":[{"name":"computehive","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY" > /tmp/s3.json
+        exec weed server -dir=/data -s3 -s3.config=/tmp/s3.json
+    volumes:
+      - seaweedfs-data:/data
+    ports:
+      # Explorateur web des fichiers (filer), réservé au PC serveur : http://localhost:8888
+      - "127.0.0.1:8888:8888"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/healthz"]
+      interval: 5s
+      timeout: 3s
+      start_period: 60s
+      retries: 30
+    restart: unless-stopped
+
   app-main:
     build: apps/app-main
     environment:
@@ -99,11 +124,16 @@ services:
       COMPUTEHIVE_AGENTS_TOKEN: ${COMPUTEHIVE_AGENTS_TOKEN:?définir COMPUTEHIVE_AGENTS_TOKEN dans .env}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       MAIN_URL: http://app-main:8080
+      S3_ENDPOINT: http://seaweedfs:8333
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?définir S3_ACCESS_KEY dans .env}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?définir S3_SECRET_KEY dans .env}
     ports:
       - "8081:8081"
       - "9090:9090"
     depends_on:
       app-main:
+        condition: service_healthy
+      seaweedfs:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8081/actuator/health > /dev/null"]
@@ -168,5 +198,6 @@ services:
 volumes:
   postgres-data:
   kafka-data:
+  seaweedfs-data:
   prometheus-data:
   grafana-data:

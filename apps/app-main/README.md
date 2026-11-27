@@ -12,7 +12,7 @@ Il tient dans `MainApplication` et dans le `pom.xml` :
 |---|---|---|---|
 | jobs, machines, quotas | `service-impl` | `service-rest-cli` → `app-main` | `service-impl` |
 | scheduling | `service-rest-cli` → `app-scheduling` | `service-impl` + porte gRPC | `service-impl` + porte gRPC |
-| Checkpoints des agents | — | API REST + stockage distant simulé | API REST + disque local |
+| Checkpoints des agents | — | API REST + stockage S3 (SeaweedFS) | API REST + disque local |
 | Messagerie | Kafka | Kafka | mémoire |
 | Notifications | e-mail (Mailpit) | — | logs |
 | Tableau de bord | page + `dashboard` (tentatives lues par le proxy de scheduling) | — | page + `dashboard` |

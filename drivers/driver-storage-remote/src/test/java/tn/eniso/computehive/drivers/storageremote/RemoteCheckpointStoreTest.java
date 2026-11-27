@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import tn.eniso.computehive.core.infra.exception.NotFoundException;
+import tn.eniso.computehive.drivers.storageremote.RemoteBucket.ObjectInfo;
 import tn.eniso.computehive.extensions.checkpoints.api.CheckpointKey;
 import tn.eniso.computehive.extensions.checkpoints.api.CheckpointStorageException;
 import tn.eniso.computehive.extensions.checkpoints.api.Sha256;
@@ -12,6 +13,7 @@ import tn.eniso.computehive.extensions.checkpoints.api.Sha256;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Optional;
@@ -20,12 +22,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Le stockage distant simulé et sa protection Resilience4j : retry, ouverture du circuit, retour à la normale. */
+/** Le stockage distant (simulé ici) et sa protection Resilience4j : retry, ouverture du circuit, retour à la normale. */
 class RemoteCheckpointStoreTest {
 
     private static final CheckpointKey KEY = new CheckpointKey("j-7", 1, 4);
-    private static final RemoteStorageProperties FAST = new RemoteStorageProperties(Duration.ZERO, 0.0, 3,
-            Duration.ofMillis(10), 10, 50, Duration.ofMillis(300));
+    private static final RemoteStorageProperties FAST = new RemoteStorageProperties(
+            RemoteStorageProperties.defaults().s3(), Duration.ZERO, 0.0, 3, Duration.ofMillis(10), 10, 50,
+            Duration.ofMillis(300));
 
     private static InputStream content(String text) {
         return new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8));
@@ -43,15 +46,15 @@ class RemoteCheckpointStoreTest {
         }
 
         @Override
-        public void put(String key, RemoteObject object) {
+        public void put(String key, Path file, ObjectInfo info) {
             failFirstCalls();
-            super.put(key, object);
+            super.put(key, file, info);
         }
 
         @Override
-        public Optional<RemoteObject> get(String key) {
+        public Optional<ObjectInfo> stat(String key) {
             failFirstCalls();
-            return super.get(key);
+            return super.stat(key);
         }
 
         private void failFirstCalls() {
@@ -132,5 +135,22 @@ class RemoteCheckpointStoreTest {
         assertThat(meters.get("resilience4j.retry.calls")
                 .tags("name", "checkpoint-storage", "kind", "successful_with_retry").functionCounter().count())
                 .isEqualTo(1);
+    }
+
+    @Test
+    void theTemporaryCopyOfTheContentIsDeletedAfterTheUpload() {
+        Path[] uploaded = new Path[1];
+        SimulatedRemoteBucket bucket = new SimulatedRemoteBucket(Duration.ZERO, 0, 1) {
+            @Override
+            public void put(String key, Path file, ObjectInfo info) {
+                uploaded[0] = file;
+                super.put(key, file, info);
+            }
+        };
+        RemoteCheckpointStore store = new RemoteCheckpointStore(bucket, FAST, Clock.systemUTC());
+
+        store.store(KEY, content("weights"));
+
+        assertThat(uploaded[0]).isNotNull().doesNotExist();
     }
 }

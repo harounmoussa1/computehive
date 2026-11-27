@@ -89,7 +89,8 @@ garanties déjà acquises :
   - `MpEndToEndIT` lance les deux jars dans deux processus, avec PostgreSQL, Kafka et Mailpit, et rejoue la panne
     d'un PC.
 - Le stockage distant des checkpoints est simulé, en mémoire : un redémarrage d'`app-scheduling` perd les fichiers.
-  Un job repart alors de son dernier checkpoint encore disponible, ou de zéro.
+  Un job repart alors de son dernier checkpoint encore disponible, ou de zéro. **Corrigé par l'ADR 0015** (stockage
+  S3 persistant, SeaweedFS).
 - Si `app-main` tombe, plus rien n'est placé, mais rien n'est perdu : `app-scheduling` réessaie au passage suivant,
   et les agents gardent leur stream. Un `Progress` reçu pendant la coupure est perdu, le suivant le remplace.
 

@@ -149,7 +149,7 @@ def assemblies():
     b.append(box(685, 42, 230, 38, "scheduling  (service-impl)", "impl", size=12))
     for i, m in enumerate(["jobs", "machines", "quotas"]):
         b.append(box(685, 92 + i * 50, 230, 38, f"{m}  (service-rest-cli)", "cli", size=12))
-    b.append(box(685, 245, 230, 50, ["porte gRPC :9090 · Kafka", "checkpoints :8081 (simulé)"], "white",
+    b.append(box(685, 245, 230, 50, ["porte gRPC :9090 · Kafka", "checkpoints :8081 (S3)"], "white",
                  size=11.5, bold_first=False))
     b.append(arrow(590, 120, 660, 120, "blue", both=True))
     b.append(text(625, 108, "REST", 11, color="#2563eb", weight="bold"))

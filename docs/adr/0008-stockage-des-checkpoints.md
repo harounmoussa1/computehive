@@ -40,7 +40,8 @@ dépendre que de contrats d'extension.
 - Un dépôt qui échoue n'est pas annoncé : le checkpoint officiel reste le précédent, et le job perd au
   plus les epochs écoulées depuis.
 - Le driver distant garde les fichiers en mémoire (simulation) ; un vrai stockage objet (ex. MinIO, gratuit
-  et auto-hébergé) prendrait sa place sans changer le contrat.
+  et auto-hébergé) prendrait sa place sans changer le contrat. **Fait par l'ADR 0015** : stockage compatible S3
+  (SeaweedFS), MinIO n'étant plus distribué en image Docker libre.
 
 ## Alternatives écartées
 

@@ -18,8 +18,8 @@ import tn.eniso.computehive.drivers.storageremote.RemoteCheckpointStoreConfigura
  *       ({@code checkpoint-storage-ws-rest}) sont ici, avec {@code scheduling-service-impl} : les ordres aux agents
  *       repartent par les streams ouverts dans ce processus, et le checkpoint qu'un agent dépose est vérifié par
  *       scheduling avant de devenir officiel ;</li>
- *   <li><b>drivers</b> : Kafka (événements venus d'{@code app-main}) et le stockage distant simulé des
- *       checkpoints.</li>
+ *   <li><b>drivers</b> : Kafka (événements venus d'{@code app-main}) et le stockage S3 des checkpoints
+ *       (SeaweedFS, ADR 0015).</li>
  * </ul>
  */
 @SpringBootApplication(

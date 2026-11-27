@@ -11,7 +11,7 @@
 
     <artifactId>driver-storage-remote</artifactId>
     <name>ComputeHive :: Driver :: Storage Remote</name>
-    <description>Stockage distant simulé, protégé par circuit breaker et retries (Resilience4j).</description>
+    <description>Stockage distant compatible S3 (SeaweedFS en déploiement, simulé pour les tests), protégé par circuit breaker et retries (Resilience4j).</description>
 
     <properties>
         <pyramid.banned.1>tn.eniso.computehive:driver-*</pyramid.banned.1>
@@ -25,6 +25,11 @@
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>checkpoint-storage-api</artifactId>
+        </dependency>
+        <dependency>
+            <!-- Client S3 générique (bibliothèque de MinIO) : marche avec SeaweedFS, MinIO, Garage, Amazon S3 -->
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
         </dependency>
         <dependency>
             <groupId>io.github.resilience4j</groupId>
@@ -55,6 +60,11 @@
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

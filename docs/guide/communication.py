@@ -136,7 +136,7 @@ def storage():
     items = [
         (30, 45, ["PostgreSQL", "volume postgres-data", "un schéma par module"], "dal"),
         (240, 45, ["Kafka", "volume kafka-data", "événements"], "infra"),
-        (450, 45, ["app-scheduling", "checkpoints en mémoire", "(M/P : stockage simulé)"], "bad"),
+        (450, 45, ["SeaweedFS (S3)", "volume seaweedfs-data", "checkpoints, fichiers"], "dal"),
         (30, 150, ["Prometheus", "volume prometheus-data", "métriques, 15 jours"], "white"),
         (240, 150, ["Grafana", "volume grafana-data"], "white"),
         (450, 150, ["Mailpit", "dans le conteneur", "e-mails simulés"], "white"),
@@ -371,8 +371,8 @@ drivers, M/1 ↔ M/P, découpage en applications</td></tr>
 revue des deux membres du binôme.</p>
 
 <h1><span class="num">7</span>Où sont stockées les données</h1>
-<p>Tout est sur le <b>disque local du PC serveur</b>, dans des volumes Docker (qui survivent à l'arrêt des conteneurs).
-<b>Aucune donnée n'est stockée sur un NFS</b> ni sur un autre partage réseau.</p>
+<p>Tout est sur le <b>disque local du PC serveur</b>, dans des volumes Docker (qui survivent à l'arrêt des conteneurs) :
+PostgreSQL pour les données, SeaweedFS pour les fichiers. <b>Aucune donnée n'est stockée sur un NFS</b>.</p>
 <figure class="xs">{{FIG:storage}}<figcaption>Les données du serveur et des agents.</figcaption></figure>
 <h2>Les données métier : un schéma PostgreSQL par module</h2>
 <table>
@@ -389,15 +389,15 @@ revue des deux membres du binôme.</p>
 <table>
 <tr><th>Mode</th><th>Driver</th><th>Emplacement</th></tr>
 <tr><td>M/1 (<code>app-modulith</code>)</td><td><code>driver-storage-local</code></td><td>disque du serveur, <code>data/checkpoints/</code> (<code>CHECKPOINT_DIR</code>)</td></tr>
-<tr><td>M/P (<code>docker compose</code>)</td><td><code>driver-storage-remote</code></td><td><b>mémoire</b> d'<code>app-scheduling</code> (stockage distant simulé, pour Resilience4j)</td></tr>
+<tr><td>M/P (<code>docker compose</code>)</td><td><code>driver-storage-remote</code></td><td><b>SeaweedFS</b>, stockage compatible S3 auto-hébergé, volume <code>seaweedfs-data</code> ; appels protégés par Resilience4j (ADR 0015)</td></tr>
 </table>
 <p>Sans NFS, les fichiers passent par le serveur en HTTP : l'agent du PC 12 dépose le checkpoint
 (<code>PUT /api/checkpoints/…</code>), l'agent du PC 15 le télécharge à la reprise (<code>GET</code>) et vérifie son
 SHA-256. La clé contient la tentative : un agent périmé ne peut rien écraser (ADR 0008).</p>
-<div class="box warn"><b>Point faible.</b> En M/P, si <code>app-scheduling</code> redémarre, les checkpoints en mémoire
-sont perdus. Correction prévue : <code>driver-storage-local</code> avec un volume Docker, ou MinIO (stockage objet gratuit
-et auto-hébergé). Un NFS monté sur le serveur conviendrait aussi, sans changer le code : il suffit d'y faire pointer
-le dossier des checkpoints.</div>
+<div class="box ok"><b>Persistant et partagé.</b> Les fichiers sont dans SeaweedFS, avec son propre volume : ils
+survivent au redémarrage des applications, et <code>app-main</code> (dépôt depuis le tableau de bord) comme
+<code>app-scheduling</code> (téléchargement par les agents) y ont accès. MinIO était prévu, mais ses images Docker ne sont
+plus distribuées librement ; le code parle S3 et marcherait aussi avec MinIO (ADR 0015).</div>
 
 <h1><span class="num">8</span>À retenir pour la soutenance</h1>
 <div class="box"><b>Kafka.</b> « Kafka est la messagerie <b>interne</b> du serveur, entre modules. C'est un driver
@@ -408,8 +408,8 @@ remplaçable, absent en M/1. Le dialogue avec les machines passe par gRPC. »</d
 <div class="box"><b>Contrats.</b> « Les modules dépendent du contrat <code>MessageBroker</code>, jamais d'un driver. Les
 agents, programmes extérieurs, ne dépendent que de <code>worker.proto</code>. On peut changer toute la technique
 interne du serveur sans toucher à l'agent. »</div>
-<div class="box"><b>Données.</b> « Un schéma PostgreSQL par module, sur le disque du serveur ; les checkpoints passent
-par le serveur en HTTP, vérifiés par SHA-256 ; pas de NFS. »</div>
+<div class="box"><b>Données.</b> « Un schéma PostgreSQL par module ; les fichiers dans un stockage S3 auto-hébergé
+(SeaweedFS). Les agents passent par le serveur en HTTP, chaque fichier est vérifié par SHA-256 ; pas de NFS. »</div>
 """
 
 

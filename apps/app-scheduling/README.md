@@ -38,11 +38,16 @@ mortes des machines dont les heartbeats n'ont pas pu arriver pendant la coupure.
 | `COMPUTEHIVE_INTERNAL_TOKEN` | vide : l'application refuse de démarrer (les proxys l'exigent) |
 | `MAIN_URL` | `http://localhost:8080` (jobs, machines et quotas) |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` |
-| `CHECKPOINT_STORE_LATENCY`, `CHECKPOINT_STORE_FAILURE_RATE` | `50ms`, `0.0` : comportement du stockage distant simulé |
+| `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` | vide (stockage simulé en mémoire), `computehive` : stockage S3 des checkpoints (SeaweedFS dans docker compose) |
+| `CHECKPOINT_STORE_LATENCY`, `CHECKPOINT_STORE_FAILURE_RATE` | `50ms`, `0.0` : comportement du stockage simulé (sans `S3_ENDPOINT`) |
 
-Le stockage des checkpoints est simulé, en mémoire. Avec `CHECKPOINT_STORE_FAILURE_RATE=0.3`, on voit les
-retries et le circuit breaker de Resilience4j à l'œuvre, y compris dans Grafana (graphes « Circuit breakers » et
-« Retries »). Un redémarrage perd les fichiers.
+Les checkpoints sont rangés dans SeaweedFS, un stockage compatible S3 lancé par docker compose avec son volume
+(ADR 0015) : ils survivent aux redémarrages. Chaque appel est protégé par Resilience4j (retry puis circuit breaker),
+visible dans Grafana (graphes « Circuit breakers » et « Retries ») ; pour le montrer, arrêter le stockage pendant
+un job (`docker compose stop seaweedfs`), puis le relancer.
+
+Sans `S3_ENDPOINT` (développement), un stockage simulé en mémoire le remplace et un avertissement le signale ; avec
+`CHECKPOINT_STORE_FAILURE_RATE=0.3`, on y voit les retries et le circuit breaker. Un redémarrage perd alors les fichiers.
 
 ## Métriques
 

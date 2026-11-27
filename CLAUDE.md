@@ -13,7 +13,8 @@ relance le job sur un autre PC depuis le dernier checkpoint (pas depuis zéro).
 - **Serveur** : un seul PC, sous Docker Compose (scheduler, modules, Kafka, PostgreSQL, stockage).
 - **Agents (workers)** : chaque PC avec GPU NVIDIA exécute un worker-agent en natif (sans Docker) + Python + PyTorch.
 - PC sans GPU NVIDIA = worker CPU.
-- Aucune API payante : paiement, stockage distant, notifications sont simulés.
+- Aucune API payante : paiement et notifications sont simulés ; le stockage de fichiers est auto-hébergé
+  (SeaweedFS, compatible S3, ADR 0015).
 
 ## Stack imposée
 
@@ -77,6 +78,7 @@ computehive/
 ├── tests/mp-end-to-end-tests/ les deux jars M/P en processus séparés (PostgreSQL, Kafka, Mailpit)
 ├── docker-compose.yml         déploiement M/P du PC serveur (jetons dans .env, cf. .env.example)
 ├── observability/             Prometheus (prometheus.yml) et Grafana (source + tableau de bord provisionnés)
+│                              (docker compose lance aussi SeaweedFS, stockage de fichiers compatible S3, ADR 0015)
 ├── modules/                   (artefacts nommés <module>-<couche>, ex. jobs-service-api)
 │   ├── jobs/                  infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, service-rest-cli
 │   ├── machines/              infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, service-rest-cli
