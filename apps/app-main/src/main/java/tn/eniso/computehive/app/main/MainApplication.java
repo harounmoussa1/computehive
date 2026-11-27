@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
 import org.springframework.context.annotation.Import;
 import tn.eniso.computehive.drivers.brokerkafka.KafkaBrokerConfiguration;
 import tn.eniso.computehive.drivers.notifemail.EmailNotifierConfiguration;
+import tn.eniso.computehive.drivers.storageremote.RemoteStorageConfiguration;
 
 /**
  * ComputeHive en M/P, processus principal : jobs, machines et quotas, avec l'API des utilisateurs.
@@ -24,7 +25,7 @@ import tn.eniso.computehive.drivers.notifemail.EmailNotifierConfiguration;
 @SpringBootApplication(
         scanBasePackages = {"tn.eniso.computehive.core", "tn.eniso.computehive.modules"},
         exclude = KafkaAutoConfiguration.class)
-@Import({KafkaBrokerConfiguration.class, EmailNotifierConfiguration.class})
+@Import({KafkaBrokerConfiguration.class, EmailNotifierConfiguration.class, RemoteStorageConfiguration.class})
 public class MainApplication {
 
     public static void main(String[] args) {

@@ -46,6 +46,15 @@ computehive:
     kafka:
       bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
       client-id: computehive-main
+  checkpoints:
+    remote:
+      # Stockage S3 des fichiers déposés depuis le tableau de bord (codes, datasets), le même qu'app-scheduling, qui
+      # les donne aux agents (SeaweedFS dans docker compose, ADR 0015). Sans adresse : stockage simulé en mémoire.
+      s3:
+        endpoint: ${S3_ENDPOINT:}
+        access-key: ${S3_ACCESS_KEY:}
+        secret-key: ${S3_SECRET_KEY:}
+        bucket: ${S3_BUCKET:computehive}
   notifications:
     email:
       host: ${MAIL_HOST:localhost}

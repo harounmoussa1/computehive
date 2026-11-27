@@ -19,6 +19,7 @@
         <module>machines</module>
         <module>scheduling</module>
         <module>quotas</module>
+        <module>files</module>
         <module>dashboard</module>
     </modules>
 </project>

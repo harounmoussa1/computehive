@@ -84,6 +84,8 @@ computehive/
 │   ├── machines/              infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, service-rest-cli
 │   ├── scheduling/            infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, ws-grpc, service-rest-cli
 │   ├── quotas/                infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, service-rest-cli
+│   ├── files/                 infra, dal-api, dal-jpa, service-api, service-impl, ws-rest : bibliothèque de
+│   │                          l'utilisateur (codes et datasets zip vérifiés, /api/library ; ADR 0013)
 │   └── dashboard/             infra, service-api, service-impl, ws-rest (+ page web) : sans DAL, lit les façades
 ├── extensions/                contrats techniques (les modules ne dépendent que de ça)
 │   ├── messaging-broker/      messaging-broker-api

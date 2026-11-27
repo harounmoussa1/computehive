@@ -37,7 +37,9 @@ import tn.eniso.computehive.contracts.worker.v1.AgentMessage;
 import tn.eniso.computehive.contracts.worker.v1.Register;
 import tn.eniso.computehive.contracts.worker.v1.ServerCommand;
 import tn.eniso.computehive.contracts.worker.v1.WorkerGatewayGrpc;
+import tn.eniso.computehive.core.infra.util.Sha256;
 import tn.eniso.computehive.modules.dashboard.infra.JobDetails;
+import tn.eniso.computehive.modules.files.infra.FileInfo;
 import tn.eniso.computehive.modules.jobs.infra.JobInfo;
 import tn.eniso.computehive.modules.jobs.infra.JobStatus;
 import tn.eniso.computehive.modules.machines.infra.MachineStatus;
@@ -52,19 +54,24 @@ import tn.eniso.computehive.simulator.Behaviour;
 import tn.eniso.computehive.simulator.CheckpointClient;
 import tn.eniso.computehive.simulator.SimulatedAgent;
 
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -112,6 +119,7 @@ class ModulithEndToEndIT {
     @DynamicPropertySource
     static void checkpointStorage(DynamicPropertyRegistry registry) {
         registry.add("computehive.checkpoints.local.directory", () -> checkpointDirectory.toString());
+        registry.add("computehive.files.local.directory", () -> checkpointDirectory.resolve("files").toString());
     }
 
     @LocalServerPort
@@ -317,6 +325,47 @@ class ModulithEndToEndIT {
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(upload.statusCode()).isEqualTo(401);
         assertThat(upload.body()).contains("missing or invalid agent token");
+    }
+
+    @Test
+    void aDatasetUploadedToTheLibraryIsDownloadedByAnAgentWithResume() throws Exception {
+        byte[] zip = zipOf("labels.csv", "0,1,2,3,4,5,6,7,8,9\n");
+        HttpHeaders user = new HttpHeaders();
+        user.set("X-User-Id", "u-9");
+        user.setContentType(MediaType.parseMediaType("application/zip"));
+
+        // Dépôt depuis le tableau de bord : vérifié, rangé sous son empreinte, visible dans la bibliothèque.
+        ResponseEntity<FileInfo> uploaded = rest.exchange("/api/library/datasets/mnist", HttpMethod.POST,
+                new HttpEntity<>(zip, user), FileInfo.class);
+        assertThat(uploaded.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String sha256 = uploaded.getBody().sha256();
+        assertThat(sha256).isEqualTo(Sha256.of(zip));
+        assertThat(rest.exchange("/api/library?kind=DATASET", HttpMethod.GET, new HttpEntity<>(user), String.class)
+                .getBody()).contains("\"mnist\"");
+
+        // Téléchargement par un agent, repris au 10e octet, comme après une coupure.
+        HttpHeaders agent = new HttpHeaders();
+        agent.setBearerAuth(AGENT_TOKEN);
+        agent.set(HttpHeaders.RANGE, "bytes=10-");
+        ResponseEntity<byte[]> rest10 = rest.exchange("/api/files/" + sha256, HttpMethod.GET,
+                new HttpEntity<>(agent), byte[].class);
+        assertThat(rest10.getStatusCode()).isEqualTo(HttpStatus.PARTIAL_CONTENT);
+        assertThat(rest10.getHeaders().getFirst("X-File-Sha256")).isEqualTo(sha256);
+        assertThat(rest10.getBody()).isEqualTo(Arrays.copyOfRange(zip, 10, zip.length));
+
+        // Sans le jeton des agents, rien n'est téléchargeable.
+        assertThat(rest.getForEntity("/api/files/" + sha256, String.class).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    private static byte[] zipOf(String name, String content) throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
+            zip.putNextEntry(new ZipEntry(name));
+            zip.write(content.getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        return bytes.toByteArray();
     }
 
     @Test

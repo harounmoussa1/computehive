@@ -100,6 +100,9 @@ services:
       MAIL_HOST: mailpit
       MAIL_PORT: 1025
       SCHEDULING_URL: http://app-scheduling:8081
+      S3_ENDPOINT: http://seaweedfs:8333
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?définir S3_ACCESS_KEY dans .env}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?définir S3_SECRET_KEY dans .env}
     ports:
       - "8080:8080"
     depends_on:
@@ -109,6 +112,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      seaweedfs:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health > /dev/null"]
       interval: 5s
