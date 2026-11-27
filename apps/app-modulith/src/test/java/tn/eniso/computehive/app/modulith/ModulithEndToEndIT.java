@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -79,6 +80,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 // (@DirtiesContext) est ainsi fermé avant l'arrêt du conteneur PostgreSQL, et ses tâches périodiques ne
 // tournent jamais contre une base arrêtée.
 @Testcontainers(disabledWithoutDocker = true)
+// Spring Boot désactive l'export des métriques dans les tests : on le réactive, le test lit /actuator/prometheus.
+@AutoConfigureObservability(tracing = false)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "computehive.grpc.port=0",
         "computehive.agents.token=" + ModulithEndToEndIT.AGENT_TOKEN,
