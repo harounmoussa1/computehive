@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import tn.eniso.computehive.modules.jobs.infra.JobCancelledEvent;
 import tn.eniso.computehive.modules.jobs.infra.JobInfo;
 import tn.eniso.computehive.modules.jobs.infra.JobStatus;
+import tn.eniso.computehive.modules.jobs.infra.JobStatusUpdate;
 import tn.eniso.computehive.modules.jobs.service.api.JobsEvents;
 import tn.eniso.computehive.modules.machines.infra.MachineDeadEvent;
 import tn.eniso.computehive.modules.machines.infra.MachineStatus;
@@ -203,6 +204,21 @@ class ReassignmentScenariosTest {
 
         assertThat(f.agents.stops(pc)).singleElement().extracting(AgentCommand.StopJob::reason)
                 .isEqualTo(StopReason.CANCELLED);
+        assertThat(f.machines.statusOf(pc)).isEqualTo(MachineStatus.ONLINE);
+    }
+
+    @Test
+    void theReconcilerClosesTheAttemptOfAJobItsAgentJustFinished() {
+        String pc = f.connectGpuAgent("a1");
+        JobInfo job = runningJobOn(pc);
+        // Fin du job en deux écritures : le job est DONE, la réconciliation passe avant que la tentative soit close.
+        f.jobs.updateStatus(job.id(), JobStatusUpdate.done(0.98));
+
+        assertThat(f.reconciler.reconcile()).isEqualTo(1);
+
+        assertThat(f.scheduling.attemptsOf(job.id())).extracting(AssignmentInfo::status)
+                .containsExactly(AssignmentStatus.COMPLETED);
+        assertThat(f.agents.stops(pc)).as("the agent already finished: no StopJob").isEmpty();
         assertThat(f.machines.statusOf(pc)).isEqualTo(MachineStatus.ONLINE);
     }
 

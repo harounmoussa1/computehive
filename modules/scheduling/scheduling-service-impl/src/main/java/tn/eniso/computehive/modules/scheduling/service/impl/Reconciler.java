@@ -14,6 +14,7 @@ import tn.eniso.computehive.modules.scheduling.infra.Assignment;
 import tn.eniso.computehive.modules.scheduling.infra.agent.AgentCommand;
 import tn.eniso.computehive.modules.scheduling.service.impl.entity.AssignmentCrudService;
 
+import java.time.Clock;
 import java.util.Optional;
 
 /**
@@ -24,7 +25,10 @@ import java.util.Optional;
  *
  * <ul>
  *   <li>tentative active sur une machine {@code DEAD} ou disparue : réattribution ;</li>
- *   <li>tentative active d'un job terminé (annulé…) : arrêt ;</li>
+ *   <li>tentative active d'un job terminé par son propre agent ({@code DONE} ou {@code FAILED} sur sa machine) :
+ *       clôture avec ce résultat. C'est le cas quand la réconciliation passe entre les deux écritures de la fin
+ *       d'un job (le job d'abord, la tentative ensuite) ; elle ne doit pas la noter {@code STOPPED} ;</li>
+ *   <li>tentative active d'un autre job terminé (annulé…) : arrêt ;</li>
  *   <li>job {@code RUNNING} sans tentative active : remis en attente.</li>
  * </ul>
  */
@@ -37,13 +41,15 @@ public class Reconciler {
     private final JobsModule jobs;
     private final MachinesModule machines;
     private final AttemptLifecycle lifecycle;
+    private final Clock clock;
 
     public Reconciler(AssignmentCrudService assignments, JobsModule jobs, MachinesModule machines,
-                      AttemptLifecycle lifecycle) {
+                      AttemptLifecycle lifecycle, Clock clock) {
         this.assignments = assignments;
         this.jobs = jobs;
         this.machines = machines;
         this.lifecycle = lifecycle;
+        this.clock = clock;
     }
 
     /** Une passe de réconciliation ; renvoie le nombre d'écarts réparés. */
@@ -74,6 +80,17 @@ public class Reconciler {
 
     private boolean repairAttempt(Assignment attempt) {
         Optional<JobInfo> job = jobs.findById(attempt.getJob().id());
+        if (job.isPresent() && finishedByItsAgent(job.get(), attempt)) {
+            JobInfo finished = job.get();
+            lifecycle.finish(attempt, null, a -> {
+                if (finished.status() == JobStatus.DONE) {
+                    a.complete(clock.instant());
+                } else {
+                    a.fail(finished.failureReason() == null ? "job failed" : finished.failureReason(), clock.instant());
+                }
+            });
+            return true;
+        }
         if (job.isEmpty() || job.get().status().isTerminal()) {
             lifecycle.stop(attempt, "job is " + job.map(j -> j.status().name()).orElse("gone"),
                     AgentCommand.StopReason.CANCELLED);
@@ -87,5 +104,12 @@ public class Reconciler {
             return true;
         }
         return false;
+    }
+
+    /** Le job a reçu son statut final de l'agent qui exécute cette tentative : il ne reste qu'à la clôturer. */
+    private static boolean finishedByItsAgent(JobInfo job, Assignment attempt) {
+        return (job.status() == JobStatus.DONE || job.status() == JobStatus.FAILED)
+                && job.machine() != null
+                && job.machine().id().equals(attempt.getMachine().id());
     }
 }
