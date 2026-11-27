@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ComputeHive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --paper: #FBF6EC; --paper2: #F4EBD9; --card: #FFFDF8; --line: #E6D8BC;
+    --ink: #1D1B16; --ink2: #4A4438; --dim: #8A8170;
+    --honey: #F2A900; --amber: #D97706; --deep: #7C4A03;
+    --teal: #0F766E; --teal2: #14B8A6; --coral: #E5484D; --green: #2F9E44; --plum: #7C3AED;
+    --head: "Bricolage Grotesque", Georgia, serif; --text: "Inter", system-ui, sans-serif; --mono: "JetBrains Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #EFE4CF; color: var(--ink); font-family: var(--text); overflow: hidden; }
+  .stage { position: absolute; left: 50%; top: 50%; width: 1600px; height: 900px; transform: translate(-50%, -50%) scale(var(--s, 1));
+           box-shadow: 0 30px 80px rgba(60, 40, 0, .18); }
+  .slide { position: absolute; inset: 0; padding: 72px 100px 70px; display: flex; flex-direction: column; gap: 22px;
+           background: var(--paper); opacity: 0; visibility: hidden; transform: scale(.985);
+           transition: opacity .5s ease, transform .6s ease, visibility .5s; overflow: hidden; }
+  .slide.active { opacity: 1; visibility: visible; transform: none; }
+  .slide::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill='none' stroke='%23E9DDC4' stroke-width='1.6'/%3E%3Cpath d='M28 0L28 34L0 50L0 84L28 100L56 84L56 50L28 34' fill='none' stroke='%23E9DDC4' stroke-width='1.6'/%3E%3C/svg%3E");
+    -webkit-mask-image: radial-gradient(900px 600px at 100% 0%, #000 0%, transparent 70%);
+            mask-image: radial-gradient(900px 600px at 100% 0%, #000 0%, transparent 70%); }
+  .slide > * { position: relative; }
+  .slide.dark { background: #1D1B16; color: #FBF6EC; }
+  .slide.dark::before { opacity: .12; -webkit-mask-image: none; mask-image: none; }
+
+  h1 { font-family: var(--head); font-size: 136px; font-weight: 800; line-height: .95; margin: 0; letter-spacing: -4px; }
+  h2 { font-family: var(--head); font-size: 60px; font-weight: 700; line-height: 1.05; margin: 0; letter-spacing: -1.5px; }
+  .kicker { display: inline-flex; align-items: center; gap: 12px; font-family: var(--mono); font-size: 18px; letter-spacing: 2px;
+            text-transform: uppercase; color: var(--deep); margin: 0; }
+  .kicker::before { content: ""; width: 18px; height: 20px; background: var(--honey);
+                    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+  .slide.dark .kicker { color: var(--honey); }
+  .hl { background: linear-gradient(transparent 60%, #FFD86B 60%); padding: 0 .08em; }
+  .slide.dark .hl { background: none; color: var(--honey); }
+  .lead { font-size: 28px; line-height: 1.45; color: var(--ink2); margin: 0; max-width: 1150px; }
+  .text { font-size: 22px; line-height: 1.5; color: var(--ink2); margin: 0; }
+  .small { font-size: 19px; line-height: 1.45; color: var(--dim); margin: 0; }
+  .mono { font-family: var(--mono); }
+  .row { display: flex; gap: 28px; }
+  .grow { flex: 1; }
+  svg text { font-family: var(--text); }
+
+  .card { background: var(--card); border: 1.5px solid var(--line); border-radius: 22px; padding: 22px 24px; box-shadow: 0 8px 24px rgba(124, 74, 3, .06); }
+  .slide.dark .card { background: #2A2720; border-color: #3B362C; box-shadow: none; }
+  .num { display: inline-grid; place-items: center; width: 36px; height: 40px; font: 700 18px var(--mono); color: var(--ink); background: var(--honey);
+         clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); flex: none; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .step { display: flex; gap: 14px; align-items: flex-start; }
+  .pill { display: inline-flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 500; padding: 8px 16px; border-radius: 999px;
+          background: var(--paper2); border: 1.5px solid var(--line); color: var(--ink2); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex: none; }
+
+  /* animations rejouées à chaque arrivée */
+  .slide.active .up { animation: up .7s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--d, 0) * 110ms); }
+  @keyframes up { from { opacity: 0; transform: translateY(24px); } }
+  .slide.active .pop { animation: pop .6s cubic-bezier(.2,.9,.3,1.35) both; animation-delay: calc(var(--d, 0) * 110ms); }
+  @keyframes pop { from { opacity: 0; transform: scale(.8); } }
+  .draw { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .slide.active .draw { animation: draw 1.4s ease forwards; animation-delay: calc(var(--d, 0) * 200ms); }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .slide.active .fade { animation: fade .6s ease both; animation-delay: calc(var(--d, 0) * 200ms); }
+  @keyframes fade { from { opacity: 0; } }
+  .bar-fill { height: 100%; width: 0; border-radius: 9px; }
+  .slide.active .bar-fill { animation: growbar 1.2s cubic-bezier(.2,.7,.2,1) forwards; animation-delay: calc(.4s + var(--d, 0) * 120ms); }
+  @keyframes growbar { to { width: var(--w); } }
+
+  /* couverture : la ruche */
+  .hive { position: absolute; right: 60px; top: 90px; width: 640px; height: 720px; }
+  .cell { stroke: #E2D2AE; stroke-width: 3; fill: #F7EEDB; }
+  .cell.on { fill: var(--honey); stroke: #E8A000; }
+  .cell.teal { fill: var(--teal2); stroke: var(--teal); }
+  .cell.off { fill: #F2DFD9; stroke: var(--coral); stroke-dasharray: 8 6; }
+  .slide.active .cell.on { animation: glow 2.6s ease-in-out infinite; animation-delay: calc(var(--d, 0) * 300ms); }
+  @keyframes glow { 50% { fill: #FFC93C; } }
+
+  /* modules, technologies */
+  .grid5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; }
+  .mod { display: flex; flex-direction: column; gap: 12px; min-height: 290px; padding: 28px 24px; }
+  .mod .ic { width: 58px; height: 64px; display: grid; place-items: center;
+             clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+  .mod .ic svg { width: 30px; height: 30px; }
+  .mod b { font-family: var(--head); font-size: 30px; }
+  .mod span { font-size: 21px; line-height: 1.4; color: var(--ink2); }
+  .tech { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+  .tgroup { display: flex; flex-direction: column; gap: 14px; }
+  .tgroup h3 { margin: 0 0 4px; font: 600 16px var(--mono); letter-spacing: 2px; text-transform: uppercase; }
+  .tb { padding: 14px 18px; border-radius: 14px; background: var(--paper2); border: 1.5px solid var(--line); }
+  .tb b { display: block; font-size: 22px; }
+  .tb span { font-size: 17px; color: var(--dim); }
+
+  /* statistiques */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .stat .n { font-family: var(--head); font-size: 88px; font-weight: 800; line-height: 1; letter-spacing: -2px; }
+  .stat .l { font-size: 20px; color: var(--ink2); margin-top: 6px; }
+
+  /* navigation */
+  .bar { position: fixed; left: 0; bottom: 0; height: 5px; background: linear-gradient(90deg, var(--honey), var(--amber)); transition: width .4s ease; z-index: 5; }
+  .count { position: fixed; right: 18px; bottom: 14px; z-index: 5; width: 44px; height: 50px; display: grid; place-items: center;
+           font: 700 14px var(--mono); color: var(--ink); background: var(--honey);
+           clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+  /* notes de l’orateur (touche N) */
+  aside.notes { display: none; }
+  .notes-panel { position: fixed; left: 0; right: 0; bottom: 0; height: 36vh; z-index: 6; display: flex; flex-direction: column;
+                 background: #1D1B16; color: #EFE6D2; border-top: 4px solid var(--honey); font-family: var(--text); }
+  .notes-panel[hidden] { display: none; }
+  .np-head { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; padding: 12px 28px 8px;
+             font: 14px var(--mono); color: var(--dim); }
+  .np-head b { font: 700 20px var(--head); color: var(--honey); letter-spacing: 0; }
+  .np-body { flex: 1; overflow-y: auto; padding: 0 28px 18px; font-size: clamp(16px, 1.45vw, 22px); line-height: 1.55; }
+  .np-body p { margin: 0 0 .55em; max-width: 1500px; }
+  .np-body b { color: #FFFFFF; }
+  .np-body i { color: var(--honey); font-style: normal; font-family: var(--mono); font-size: .85em; }
+  .np-body .np-tip { margin-top: .8em; padding: 10px 14px; border-left: 3px solid var(--honey); background: #2A2720; color: #CFC4AC; font-size: .9em; }
+  .np-body .np-tip b { display: block; margin-top: 4px; color: var(--honey); }
+  .help { position: fixed; right: 22px; top: 14px; font: 13px var(--mono); color: var(--dim); z-index: 5; transition: opacity 1s; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="gHoney" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2A900" stop-opacity=".45"/><stop offset="1" stop-color="#F2A900" stop-opacity="0"/></linearGradient>
+  </defs>
+</svg>
+
+<div class="stage" id="stage">
+
+<!-- 1. Couverture -->
+<section class="slide" style="justify-content:center;">
+  <svg class="hive" viewBox="0 0 640 720" aria-hidden="true">
+    <g transform="translate(40 30)">
+      <polygon class="cell pop" style="--d:1" points="120,0 172,30 172,90 120,120 68,90 68,30"/>
+      <polygon class="cell on pop" style="--d:2" points="230,0 282,30 282,90 230,120 178,90 178,30"/>
+      <polygon class="cell pop" style="--d:3" points="340,0 392,30 392,90 340,120 288,90 288,30"/>
+      <polygon class="cell teal pop" style="--d:2" points="175,95 227,125 227,185 175,215 123,185 123,125"/>
+      <polygon class="cell on pop" style="--d:3" points="285,95 337,125 337,185 285,215 233,185 233,125"/>
+      <polygon class="cell on pop" style="--d:4" points="395,95 447,125 447,185 395,215 343,185 343,125"/>
+      <polygon class="cell pop" style="--d:3" points="120,190 172,220 172,280 120,310 68,280 68,220"/>
+      <polygon class="cell off pop" style="--d:5" points="230,190 282,220 282,280 230,310 178,280 178,220"/>
+      <polygon class="cell on pop" style="--d:4" points="340,190 392,220 392,280 340,310 288,280 288,220"/>
+      <polygon class="cell pop" style="--d:5" points="450,190 502,220 502,280 450,310 398,280 398,220"/>
+      <polygon class="cell pop" style="--d:4" points="175,285 227,315 227,375 175,405 123,375 123,315"/>
+      <polygon class="cell on pop" style="--d:6" points="285,285 337,315 337,375 285,405 233,375 233,315"/>
+      <polygon class="cell pop" style="--d:5" points="395,285 447,315 447,375 395,405 343,375 343,315"/>
+      <polygon class="cell pop" style="--d:6" points="230,380 282,410 282,470 230,500 178,470 178,410"/>
+      <polygon class="cell on pop" style="--d:7" points="340,380 392,410 392,470 340,500 288,470 288,410"/>
+      <text x="175" y="160" text-anchor="middle" font-size="18" font-weight="600" fill="#FBF6EC">mon PC</text>
+      <text x="230" y="255" text-anchor="middle" font-size="17" font-weight="600" fill="#E5484D">panne</text>
+      <text x="285" y="160" text-anchor="middle" font-size="18" font-weight="600" fill="#1D1B16">GPU</text>
+      <text x="340" y="255" text-anchor="middle" font-size="18" font-weight="600" fill="#1D1B16">GPU</text>
+    </g>
+    <g class="fade" style="--d:8" font-size="17" fill="#8A8170">
+      <rect x="60" y="590" width="18" height="18" rx="4" fill="#F2A900"/><text x="88" y="605">PC du labo avec GPU</text>
+      <rect x="60" y="622" width="18" height="18" rx="4" fill="#14B8A6"/><text x="88" y="637">mon PC : source et sink</text>
+      <rect x="60" y="654" width="18" height="18" rx="4" fill="#F2DFD9" stroke="#E5484D" stroke-dasharray="4 3"/><text x="88" y="669">PC en panne : le job part ailleurs</text>
+    </g>
+  </svg>
+  <p class="kicker up">Projet de module · ENISo</p>
+  <h1 class="up" style="--d:1">Compute<br><span style="color:var(--amber)">Hive</span></h1>
+  <p class="lead up" style="--d:2; max-width: 760px;">Une ruche de calcul pour le labo : chacun envoie son entraînement PyTorch, un PC avec GPU le calcule, et <span class="hl">si ce PC tombe, le travail repart ailleurs</span> depuis son dernier checkpoint.</p>
+  <div class="row up" style="--d:3; gap:12px; flex-wrap:wrap; max-width: 760px;">
+    <span class="pill">Serveur Java · Spring Boot</span><span class="pill">Agent Rust</span><span class="pill">Pyramid Architecture</span>
+  </div>
+  <aside class="notes" data-title="Couverture" data-time="30 s">
+    <p>Bonjour. Nous vous présentons <b>ComputeHive</b>, une « ruche de calcul » pour le laboratoire.</p>
+    <p>L’idée est simple : chacun envoie son entraînement PyTorch, un PC du labo équipé d’un GPU le calcule, et si ce PC tombe en panne, le travail repart sur un autre PC, depuis son dernier checkpoint.</p>
+    <p>Le serveur est écrit en Java avec Spring Boot, l’agent installé sur les PC en Rust, et tout le serveur suit la Pyramid Architecture.</p>
+  </aside>
+</section>
+
+<!-- 2. La problématique -->
+<section class="slide">
+  <p class="kicker up">La problématique</p>
+  <h2 class="up" style="--d:1">Des GPU partout, <span class="hl">mal partagés</span></h2>
+  <div class="row" style="flex:1; gap:56px; align-items:center;">
+    <svg viewBox="0 0 640 400" width="640" height="400" aria-label="Six PC du labo : deux occupés, trois GPU inutilisés, un en panne">
+      <g class="pop" style="--d:2">
+        <rect x="20" y="20" width="170" height="105" rx="12" fill="#FFF1CC" stroke="#D97706" stroke-width="3"/>
+        <rect x="92" y="125" width="26" height="16" fill="#D97706"/>
+        <rect x="65" y="139" width="80" height="8" rx="4" fill="#D97706"/>
+        <text x="105" y="84" text-anchor="middle" font-size="30" font-weight="700" fill="#1D1B16">100 %</text>
+        <text x="105" y="176" text-anchor="middle" font-size="18" fill="#8A8170">tout le monde le veut</text>
+      </g>
+      <g class="pop" style="--d:3">
+        <rect x="235" y="20" width="170" height="105" rx="12" fill="#FFFDF8" stroke="#D8CBAE" stroke-width="3"/>
+        <rect x="307" y="125" width="26" height="16" fill="#D8CBAE"/>
+        <rect x="280" y="139" width="80" height="8" rx="4" fill="#D8CBAE"/>
+        <text x="320" y="84" text-anchor="middle" font-size="30" font-weight="700" fill="#B8AA8C">0 %</text>
+        <text x="320" y="176" text-anchor="middle" font-size="18" fill="#8A8170">GPU inutilisé</text>
+      </g>
+      <g class="pop" style="--d:4">
+        <rect x="450" y="20" width="170" height="105" rx="12" fill="#FFFDF8" stroke="#D8CBAE" stroke-width="3"/>
+        <rect x="522" y="125" width="26" height="16" fill="#D8CBAE"/>
+        <rect x="495" y="139" width="80" height="8" rx="4" fill="#D8CBAE"/>
+        <text x="535" y="84" text-anchor="middle" font-size="30" font-weight="700" fill="#B8AA8C">0 %</text>
+        <text x="535" y="176" text-anchor="middle" font-size="18" fill="#8A8170">GPU inutilisé</text>
+      </g>
+      <g class="pop" style="--d:5">
+        <rect x="20" y="220" width="170" height="105" rx="12" fill="#FBE3E1" stroke="#E5484D" stroke-width="3" stroke-dasharray="9 6"/>
+        <rect x="92" y="325" width="26" height="16" fill="#E5484D"/>
+        <rect x="65" y="339" width="80" height="8" rx="4" fill="#E5484D"/>
+        <text x="105" y="284" text-anchor="middle" font-size="30" font-weight="700" fill="#E5484D">✕</text>
+        <text x="105" y="376" text-anchor="middle" font-size="18" fill="#E5484D">panne : tout à refaire</text>
+      </g>
+      <g class="pop" style="--d:6">
+        <rect x="235" y="220" width="170" height="105" rx="12" fill="#FFFDF8" stroke="#D8CBAE" stroke-width="3"/>
+        <rect x="307" y="325" width="26" height="16" fill="#D8CBAE"/>
+        <rect x="280" y="339" width="80" height="8" rx="4" fill="#D8CBAE"/>
+        <text x="320" y="284" text-anchor="middle" font-size="30" font-weight="700" fill="#B8AA8C">0 %</text>
+        <text x="320" y="376" text-anchor="middle" font-size="18" fill="#8A8170">GPU inutilisé</text>
+      </g>
+      <g class="pop" style="--d:7">
+        <rect x="450" y="220" width="170" height="105" rx="12" fill="#FFF1CC" stroke="#D97706" stroke-width="3"/>
+        <rect x="522" y="325" width="26" height="16" fill="#D97706"/>
+        <rect x="495" y="339" width="80" height="8" rx="4" fill="#D97706"/>
+        <text x="535" y="284" text-anchor="middle" font-size="30" font-weight="700" fill="#1D1B16">100 %</text>
+        <text x="535" y="376" text-anchor="middle" font-size="18" fill="#8A8170">réservé à la main</text>
+      </g>
+    </svg>
+    <div class="grow" style="display:flex; flex-direction:column; gap:18px;">
+      <div class="step up" style="--d:3"><span class="num">1</span><p class="text"><b>Des GPU dispersés</b> : chaque PC du labo a le sien, souvent inutilisé pendant que d’autres attendent.</p></div>
+      <div class="step up" style="--d:4"><span class="num">2</span><p class="text"><b>Tout est manuel</b> : réserver un PC, copier les données, surveiller l’entraînement soi-même.</p></div>
+      <div class="step up" style="--d:5"><span class="num">3</span><p class="text"><b>Une panne coûte cher</b> : un PC qui s’éteint après des heures de calcul, et tout est à refaire.</p></div>
+    </div>
+  </div>
+  <div class="card up" style="--d:8; background:#1D1B16; border-color:#1D1B16; padding:24px 30px;">
+    <p style="margin:0; font-family:var(--head); font-size:34px; font-weight:700; color:#FBF6EC; line-height:1.25;">Comment partager les GPU du labo de façon <span style="color:#F2A900">simple</span>, <span style="color:#F2A900">équitable</span> et <span style="color:#F2A900">tolérante aux pannes</span> ?</p>
+  </div>
+  <aside class="notes" data-title="La problématique" data-time="50 s">
+    <p>Partons du constat. Dans un labo, il y a des GPU un peu partout, mais ils sont mal partagés.</p>
+    <p><i>[montrer la figure]</i> Un PC est pris par tout le monde, pendant que trois autres ont leur GPU à 0 %.</p>
+    <p>Ensuite, tout est manuel : il faut réserver un PC, copier ses données, surveiller son entraînement soi-même.</p>
+    <p>Et surtout, une panne coûte cher : un PC qui s’éteint après des heures de calcul, et tout est à refaire.</p>
+    <p>D’où notre problématique : <b>comment partager les GPU du labo de façon simple, équitable et tolérante aux pannes ?</b></p>
+  </aside>
+</section>
+
+<!-- 2. Le principe -->
+<section class="slide">
+  <p class="kicker up">Le principe</p>
+  <h2 class="up" style="--d:1">Mon PC <span class="hl">envoie</span>, un PC du labo <span class="hl">calcule</span></h2>
+  <div style="flex:1; display:flex; align-items:center; justify-content:center;">
+    <svg viewBox="0 0 1380 440" width="1380" height="440" aria-label="Mon PC fournit le code et les données au PC du labo, qui renvoie les checkpoints ; le serveur orchestre">
+      <path id="pData" d="M330,300 C560,380 820,380 1050,300" fill="none" stroke="#0F766E" stroke-width="4" class="draw" pathLength="1" style="--d:2"/>
+      <path id="pCkpt" d="M1050,350 C820,440 560,440 330,350" fill="none" stroke="#D97706" stroke-width="4" class="draw" pathLength="1" style="--d:3"/>
+      <path id="pCtrl1" d="M300,190 L600,95" fill="none" stroke="#B8AA8C" stroke-width="3" stroke-dasharray="8 8" class="fade" style="--d:4"/>
+      <path id="pCtrl2" d="M780,95 L1080,190" fill="none" stroke="#B8AA8C" stroke-width="3" stroke-dasharray="8 8" class="fade" style="--d:4"/>
+      <circle r="9" fill="#0F766E"><animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#pData"/></animateMotion></circle>
+      <circle r="9" fill="#0F766E"><animateMotion dur="2.4s" begin="1.2s" repeatCount="indefinite"><mpath href="#pData"/></animateMotion></circle>
+      <circle r="9" fill="#D97706"><animateMotion dur="2.8s" repeatCount="indefinite"><mpath href="#pCkpt"/></animateMotion></circle>
+      <circle r="6" fill="#8A8170"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#pCtrl2"/></animateMotion></circle>
+      <text x="690" y="345" text-anchor="middle" font-size="21" font-weight="600" fill="#0F766E" class="fade" style="--d:3">code + config + données</text>
+      <text x="690" y="436" text-anchor="middle" font-size="21" font-weight="600" fill="#D97706" class="fade" style="--d:4">checkpoints · résultat</text>
+      <text x="455" y="110" text-anchor="end" font-size="19" fill="#8A8170" class="fade" style="--d:5">soumet le job</text>
+      <text x="925" y="110" text-anchor="start" font-size="19" fill="#8A8170" class="fade" style="--d:5">ordres · avancement (gRPC)</text>
+      <!-- mon PC -->
+      <g class="pop" style="--d:1">
+        <rect x="110" y="170" width="240" height="160" rx="18" fill="#FFFDF8" stroke="#0F766E" stroke-width="3"/>
+        <rect x="140" y="195" width="180" height="100" rx="8" fill="#E1F3F0"/>
+        <rect x="80" y="335" width="300" height="16" rx="8" fill="#0F766E"/>
+        <text x="230" y="254" text-anchor="middle" font-size="27" font-weight="700" fill="#0F766E">Mon PC</text>
+      </g>
+      <!-- serveur -->
+      <g class="pop" style="--d:0">
+        <rect x="600" y="20" width="180" height="36" rx="9" fill="#FFFDF8" stroke="#1D1B16" stroke-width="3"/>
+        <rect x="600" y="62" width="180" height="36" rx="9" fill="#FFFDF8" stroke="#1D1B16" stroke-width="3"/>
+        <circle cx="624" cy="38" r="6" fill="#2F9E44"/><circle cx="624" cy="80" r="6" fill="#2F9E44"/>
+        <text x="690" y="130" text-anchor="middle" font-size="24" font-weight="700" fill="#1D1B16">Serveur</text>
+      </g>
+      <!-- PC du labo -->
+      <g class="pop" style="--d:2">
+        <rect x="1040" y="160" width="250" height="190" rx="18" fill="#FFFDF8" stroke="#D97706" stroke-width="3"/>
+        <rect x="1110" y="200" width="110" height="80" rx="10" fill="#FFF1CC" stroke="#D97706" stroke-width="2"/>
+        <path d="M1130,200 v-12 M1150,200 v-12 M1170,200 v-12 M1190,200 v-12 M1130,280 v12 M1150,280 v12 M1170,280 v12 M1190,280 v12" stroke="#D97706" stroke-width="3"/>
+        <text x="1165" y="247" text-anchor="middle" font-size="22" font-weight="700" fill="#7C4A03">GPU</text>
+        <text x="1165" y="328" text-anchor="middle" font-size="24" font-weight="700" fill="#1D1B16">PC du labo</text>
+      </g>
+    </svg>
+  </div>
+  <div class="steps">
+    <div class="step up" style="--d:5"><span class="num">1</span><p class="text"><b>Mon PC</b> soumet le job et garde le code, les données et les checkpoints : il est la <b>source</b> et le <b>sink</b>.</p></div>
+    <div class="step up" style="--d:6"><span class="num">2</span><p class="text"><b>Le serveur</b> choisit un PC compatible et suit l’avancement. Il ne stocke aucun fichier.</p></div>
+    <div class="step up" style="--d:7"><span class="num">3</span><p class="text"><b>Le PC du labo</b> télécharge chez moi, entraîne, puis me renvoie ses checkpoints.</p></div>
+  </div>
+  <p class="small up" style="--d:8">Hypothèse de conception : mon PC reste allumé et joignable pendant le job.</p>
+  <aside class="notes" data-title="Le principe" data-time="50 s">
+    <p>Notre réponse tient en une phrase : mon PC envoie, un PC du labo calcule.</p>
+    <p><i>[suivre les flèches]</i> Mon PC soumet le job. Il garde le code, la config et les données, et c’est lui qui reçoit les checkpoints : il est à la fois la <b>source</b> et le <b>sink</b>.</p>
+    <p>Le serveur, au centre, ne stocke aucun fichier : il orchestre. Il choisit un PC compatible et suit l’avancement.</p>
+    <p>Le PC du labo télécharge le code et les données chez moi, entraîne, puis me renvoie ses checkpoints et le résultat.</p>
+    <p>Notre hypothèse de conception : mon PC reste allumé et joignable pendant le job.</p>
+  </aside>
+</section>
+
+<!-- 3. Le choix du PC -->
+<section class="slide">
+  <p class="kicker up">Le placement</p>
+  <h2 class="up" style="--d:1">Le serveur choisit le PC <span class="hl">le mieux adapté</span></h2>
+  <div class="row" style="flex:1; gap:44px; align-items:center;">
+    <div class="grow" style="display:flex; flex-direction:column; gap:14px;">
+      <div class="up" style="--d:2; display:flex; align-items:center; gap:14px; margin-bottom:6px;">
+        <span class="pill" style="background:#FFF1CC; border-color:#F2A900; color:#7C4A03;">Job demandé : GPU · 4 Go minimum</span>
+      </div>
+      <div class="card up" style="--d:3; padding:16px 20px; display:grid; grid-template-columns: 230px 1fr 190px; gap:16px; align-items:center; border-color:#2F9E44; border-width:2.5px;">
+        <b style="font-size:21px">PC-B · RTX 4090</b>
+        <div style="height:18px; background:#EFE6D3; border-radius:9px; overflow:hidden"><div class="bar-fill" style="--w:83%; --d:3; background:#2F9E44"></div></div>
+        <span style="font-size:19px; color:#2F9E44; font-weight:600">20 Go ✓ choisi</span>
+      </div>
+      <div class="card up" style="--d:4; padding:16px 20px; display:grid; grid-template-columns: 230px 1fr 190px; gap:16px; align-items:center;">
+        <b style="font-size:21px">PC-A · RTX 3060</b>
+        <div style="height:18px; background:#EFE6D3; border-radius:9px; overflow:hidden"><div class="bar-fill" style="--w:41%; --d:4; background:#F2A900"></div></div>
+        <span style="font-size:19px; color:var(--ink2)">9,8 Go · possible</span>
+      </div>
+      <div class="card up" style="--d:5; padding:16px 20px; display:grid; grid-template-columns: 230px 1fr 190px; gap:16px; align-items:center; opacity:.75">
+        <b style="font-size:21px">PC-C · GTX 1050</b>
+        <div style="height:18px; background:#EFE6D3; border-radius:9px; overflow:hidden"><div class="bar-fill" style="--w:6%; --d:5; background:#E5484D"></div></div>
+        <span style="font-size:19px; color:#E5484D">1,5 Go · trop peu</span>
+      </div>
+      <div class="card up" style="--d:6; padding:16px 20px; display:grid; grid-template-columns: 230px 1fr 190px; gap:16px; align-items:center; opacity:.75">
+        <b style="font-size:21px">PC-D · RTX 3070</b>
+        <span style="font-size:19px; color:var(--dim)">occupé par un autre job</span>
+        <span style="font-size:19px; color:#E5484D">exclu</span>
+      </div>
+    </div>
+    <div style="width:520px; display:flex; flex-direction:column; gap:18px;">
+      <div class="step up" style="--d:4"><span class="num">1</span><p class="text">Chaque agent envoie son état <b>toutes les 10&nbsp;s</b>&nbsp;: GPU, mémoire libre, jobs en cours.</p></div>
+      <div class="step up" style="--d:5"><span class="num">2</span><p class="text">Le serveur garde les PC <b>libres</b>, avec un GPU NVIDIA et <b>assez de mémoire libre</b>.</p></div>
+      <div class="step up" style="--d:6"><span class="num">3</span><p class="text">Il prend celui qui a <b>le plus de mémoire libre</b>, et le réserve.</p></div>
+      <div class="card up" style="--d:7; background:#FFF6DB; border-color:#F2A900;">
+        <p class="text"><b>GPU faible</b> : plus lent, mais ça tourne.<br><b>Mémoire insuffisante</b> : le PC n’est jamais choisi.</p>
+      </div>
+    </div>
+  </div>
+  <aside class="notes" data-title="Le placement" data-time="45 s">
+    <p>Comment le serveur choisit-il le PC ? Chaque agent lui envoie son état toutes les 10 secondes : son GPU, sa mémoire libre, ses jobs en cours.</p>
+    <p><i>[montrer la liste]</i> Ici, le job demande un GPU avec au moins 4 Go. Le PC-C n’a que 1,5 Go de libre : il est écarté. Le PC-D est occupé : écarté aussi.</p>
+    <p>Parmi ceux qui restent, le serveur prend celui qui a <b>le plus de mémoire libre</b>, ici le PC-B, et le réserve.</p>
+    <p>Une précision importante : un GPU faible rend l’entraînement plus lent, mais il tourne. En revanche, un GPU sans assez de mémoire n’est jamais choisi, car le job planterait.</p>
+  </aside>
+</section>
+
+<!-- 4. Panne et reprise -->
+<section class="slide">
+  <p class="kicker up">Tolérance aux pannes</p>
+  <h2 class="up" style="--d:1">Un PC tombe : reprise à l’epoch 6, <span class="hl">pas à 0</span></h2>
+  <div class="row" style="flex:1; gap:30px; align-items:center;">
+    <svg viewBox="0 0 1000 520" width="1000" height="520" aria-label="Graphe : PC-A entraîne jusqu’à l’epoch 6 puis tombe ; PC-B reprend à 6 et finit à 10 ; sans reprise, on repartirait de 0">
+      <g stroke="#E6D8BC" stroke-width="2">
+        <line x1="80" y1="440" x2="980" y2="440"/><line x1="80" y1="30" x2="80" y2="440"/>
+        <line x1="80" y1="358" x2="980" y2="358" stroke-dasharray="4 8"/><line x1="80" y1="276" x2="980" y2="276" stroke-dasharray="4 8"/>
+        <line x1="80" y1="194" x2="980" y2="194" stroke-dasharray="4 8"/><line x1="80" y1="112" x2="980" y2="112" stroke-dasharray="4 8"/>
+      </g>
+      <g font-size="18" fill="#8A8170" text-anchor="end"><text x="66" y="446">0</text><text x="66" y="364">2</text><text x="66" y="282">4</text><text x="66" y="200">6</text><text x="66" y="118">8</text><text x="66" y="36">10</text></g>
+      <text x="980" y="474" font-size="18" fill="#8A8170" text-anchor="end">temps →</text>
+      <rect x="380" y="30" width="110" height="410" fill="#E5484D" opacity=".09" class="fade" style="--d:3"/>
+      <text x="435" y="474" font-size="17" fill="#E5484D" text-anchor="middle" class="fade" style="--d:3">30 s sans signe de vie</text>
+      <path d="M490,440 L980,30" fill="none" stroke="#B8AA8C" stroke-width="3" stroke-dasharray="10 10" class="fade" style="--d:5"/>
+      <text x="975" y="415" font-size="18" fill="#8A8170" text-anchor="end" class="fade" style="--d:5">sans reprise : tout recommencer</text>
+      <path d="M80,440 L380,194" fill="none" stroke="#0F766E" stroke-width="6" stroke-linecap="round" class="draw" pathLength="1" style="--d:1"/>
+      <g fill="#0F766E" class="fade" style="--d:2"><circle cx="180" cy="358" r="8"/><circle cx="280" cy="276" r="8"/><circle cx="380" cy="194" r="8"/></g>
+      <text x="200" y="262" font-size="22" font-weight="700" fill="#0F766E" class="fade" style="--d:2">PC-A</text>
+      <g stroke="#E5484D" stroke-width="7" stroke-linecap="round" class="pop" style="--d:3"><line x1="392" y1="166" x2="418" y2="192"/><line x1="418" y1="166" x2="392" y2="192"/></g>
+      <path d="M490,194 L760,30" fill="none" stroke="#D97706" stroke-width="6" stroke-linecap="round" class="draw" pathLength="1" style="--d:4"/>
+      <circle cx="490" cy="194" r="10" fill="#D97706" class="pop" style="--d:4"/>
+      <text x="560" y="230" font-size="22" font-weight="700" fill="#D97706" class="fade" style="--d:4">PC-B reprend</text>
+      <text x="780" y="40" font-size="21" font-weight="700" fill="#2F9E44" class="fade" style="--d:5">✓ terminé</text>
+      <g class="fade" style="--d:2" font-size="17" fill="#4A4438"><circle cx="100" cy="503" r="7" fill="#0F766E"/><text x="114" y="509">checkpoint, gardé sur mon PC</text></g>
+    </svg>
+    <div class="grow" style="display:flex; flex-direction:column; gap:16px;">
+      <div class="step up" style="--d:3"><span class="num">1</span><p class="text">PC-A s’éteint à l’epoch 6 : <b>30 s</b> sans heartbeat, il est déclaré mort.</p></div>
+      <div class="step up" style="--d:4"><span class="num">2</span><p class="text">Le serveur lance la <b>tentative 2</b> sur PC-B, qui récupère le dernier checkpoint sur mon PC.</p></div>
+      <div class="step up" style="--d:5"><span class="num">3</span><p class="text">Si PC-A revient, il est arrêté (<b>fencing</b>) : jamais deux fois le même job.</p></div>
+    </div>
+  </div>
+  <aside class="notes" data-title="Panne et reprise" data-time="1 min">
+    <p>C’est le cœur du projet. <i>[suivre le graphe]</i> Le PC-A entraîne le modèle et enregistre un checkpoint toutes les deux epochs, gardé sur mon PC.</p>
+    <p>À l’epoch 6, le PC-A s’éteint. Après 30 secondes sans signe de vie, le serveur le déclare mort.</p>
+    <p>Il lance alors une deuxième tentative sur le PC-B, qui récupère le dernier checkpoint et <b>reprend à l’epoch 6, pas à 0</b>.</p>
+    <p><i>[montrer la ligne pointillée]</i> Sans ce mécanisme, il faudrait tout recommencer.</p>
+    <p>Et si le PC-A revient, par exemple après une simple coupure réseau ? Ses messages portent l’ancien numéro de tentative : le serveur les refuse et lui ordonne de s’arrêter. C’est le <b>fencing</b> : un même job ne tourne jamais deux fois.</p>
+  </aside>
+</section>
+
+<!-- 5. Les modules -->
+<section class="slide">
+  <p class="kicker up">Le serveur</p>
+  <h2 class="up" style="--d:1">5 modules, chacun son métier</h2>
+  <p class="lead up" style="--d:2">Le serveur est découpé par métier. Chaque module a ses tables et son contrat public ; les modules ne se parlent qu’à travers ces contrats.</p>
+  <div class="grid5" style="margin-top: 24px;">
+    <div class="card mod up" style="--d:3"><div class="ic" style="background:#E1F3F0"><svg viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2.2"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 10h8M8 14h5"/></svg></div>
+      <b>jobs</b><span>soumission, statuts, avancement, checkpoints</span></div>
+    <div class="card mod up" style="--d:4"><div class="ic" style="background:#FFF1CC"><svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.2"><rect x="3" y="5" width="18" height="11" rx="2"/><path d="M9 20h6M12 16v4"/></svg></div>
+      <b>machines</b><span>inscription des PC, heartbeats, détection de panne</span></div>
+    <div class="card mod up" style="--d:5; border-color:#F2A900; border-width:2.5px;"><div class="ic" style="background:#F2A900"><svg viewBox="0 0 24 24" fill="none" stroke="#1D1B16" stroke-width="2.2"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></div>
+      <b>scheduling</b><span>le cerveau : placement, fencing, reprise</span></div>
+    <div class="card mod up" style="--d:6"><div class="ic" style="background:#EDE4FF"><svg viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2.2"><path d="M5 20V12M10 20V6M15 20V14M20 20V9"/></svg></div>
+      <b>quotas</b><span>consommation et priorité : l’équité</span></div>
+    <div class="card mod up" style="--d:7"><div class="ic" style="background:#E5F4E8"><svg viewBox="0 0 24 24" fill="none" stroke="#2F9E44" stroke-width="2.2"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 15l3-4 3 3 4-5"/></svg></div>
+      <b>dashboard</b><span>le suivi en direct, dans le navigateur</span></div>
+  </div>
+  <div class="row up" style="--d:8; gap:12px; justify-content:center; margin-top: 18px; flex-wrap: wrap;">
+    <span class="pill"><i class="dot" style="background:#D97706"></i>extension messagerie → Kafka</span>
+    <span class="pill"><i class="dot" style="background:#2F9E44"></i>extension notifications → e-mail</span>
+    <span class="pill"><i class="dot" style="background:#0F766E"></i>extension stockage</span>
+    <span class="pill" style="background:#1D1B16; color:#FBF6EC; border-color:#1D1B16;">même code : M/1 ou M/P</span>
+  </div>
+  <aside class="notes" data-title="Les modules" data-time="40 s">
+    <p>Côté serveur, le code est découpé par métier, en cinq modules.</p>
+    <p><b>jobs</b> gère les entraînements soumis, <b>machines</b> les PC et la détection de panne, <b>scheduling</b> est le cerveau : placement, fencing et reprise. <b>quotas</b> assure l’équité : qui a le moins consommé passe d’abord. Et <b>dashboard</b> permet de tout suivre en direct dans le navigateur.</p>
+    <p>Chaque module a ses propres tables et un contrat public. Les modules ne se parlent qu’à travers ces contrats.</p>
+    <p>Les outils techniques (Kafka, l’e-mail, le stockage) sont des extensions. Et le même code tourne en un seul processus ou en plusieurs applications.</p>
+  </aside>
+</section>
+
+<!-- 6. Pyramid Architecture -->
+<section class="slide">
+  <p class="kicker up">The Pyramid Architecture</p>
+  <h2 class="up" style="--d:1">Chaque module est une <span class="hl">pyramide</span></h2>
+  <div class="row" style="flex:1; gap:60px; align-items:center;">
+    <svg viewBox="0 0 600 470" width="600" height="470" aria-label="Pyramide : WS, service, DAL, infra">
+      <g class="up" style="--d:2"><polygon points="235,10 365,10 403,105 197,105" fill="#F2A900"/><text x="300" y="66" text-anchor="middle" font-size="26" font-weight="700" fill="#1D1B16">WS</text><text x="300" y="90" text-anchor="middle" font-size="15" fill="#7C4A03">REST · gRPC</text></g>
+      <g class="up" style="--d:3"><polygon points="192,117 408,117 446,222 154,222" fill="#F6C24B"/><text x="300" y="168" text-anchor="middle" font-size="26" font-weight="700" fill="#1D1B16">Service</text><text x="300" y="194" text-anchor="middle" font-size="15" fill="#7C4A03">façade · métier</text></g>
+      <g class="up" style="--d:4"><polygon points="149,234 451,234 489,339 111,339" fill="#F9D985"/><text x="300" y="285" text-anchor="middle" font-size="26" font-weight="700" fill="#1D1B16">DAL</text><text x="300" y="311" text-anchor="middle" font-size="15" fill="#7C4A03">repositories · Flyway</text></g>
+      <g class="up" style="--d:5"><polygon points="106,351 494,351 532,456 68,456" fill="#FCEBC0"/><text x="300" y="402" text-anchor="middle" font-size="26" font-weight="700" fill="#1D1B16">Infra</text><text x="300" y="428" text-anchor="middle" font-size="15" fill="#7C4A03">entités · DTO</text></g>
+    </svg>
+    <div class="grow" style="display:flex; flex-direction:column; gap:16px;">
+      <div class="card up" style="--d:4"><b style="font-size:26px; font-family:var(--head)">↓ Convergence</b><p class="text" style="margin-top:4px">Une couche ne voit que l’interface de la couche du dessous.</p></div>
+      <div class="card up" style="--d:5"><b style="font-size:26px; font-family:var(--head)">⇄ Façade → façade</b><p class="text" style="margin-top:4px">Un module n’accède jamais au code ni aux tables d’un autre.</p></div>
+      <div class="card up" style="--d:6"><b style="font-size:26px; font-family:var(--head)">✓ Vérifié au build</b><p class="text" style="margin-top:4px">Maven Enforcer et ArchUnit refusent toute dépendance interdite.</p></div>
+      <p class="small up" style="--d:7">Résultat : un module peut passer dans une autre application (M/1 ↔ M/P) sans changer son code.</p>
+    </div>
+  </div>
+  <aside class="notes" data-title="La pyramide" data-time="45 s">
+    <p>Chaque module suit la <b>Pyramid Architecture</b> : quatre couches, WS, Service, DAL et Infra.</p>
+    <p>Trois règles. Une couche ne voit que l’interface de la couche du dessous. Un module n’accède jamais au code ni aux tables d’un autre : il passe par sa façade.</p>
+    <p>Et ces règles ne reposent pas sur la bonne volonté : elles sont <b>vérifiées au build</b>. Maven Enforcer et ArchUnit refusent toute dépendance interdite.</p>
+    <p>Résultat : on peut déplacer un module dans une autre application sans changer une ligne de son code.</p>
+  </aside>
+</section>
+
+<!-- L'agent Rust -->
+<section class="slide">
+  <p class="kicker up">L’agent</p>
+  <h2 class="up" style="--d:1">Un agent <span class="hl">Rust</span> sur chaque PC</h2>
+  <p class="lead up" style="--d:2">Un programme léger installé sur chaque PC du labo : il obéit au serveur, lance l’entraînement et rapporte tout ce qui se passe.</p>
+  <div class="row" style="flex:1; gap:50px; align-items:center;">
+    <svg viewBox="0 0 640 430" width="640" height="430" aria-label="L’agent Rust au centre, relié au serveur, au GPU, au script Python et à sa base SQLite">
+      <g stroke="#D8CBAE" stroke-width="3" stroke-dasharray="7 7" class="fade" style="--d:3">
+        <line x1="320" y1="215" x2="320" y2="70"/><line x1="320" y1="215" x2="110" y2="215"/>
+        <line x1="320" y1="215" x2="530" y2="215"/><line x1="320" y1="215" x2="320" y2="360"/>
+      </g>
+      <g class="pop" style="--d:2">
+        <polygon points="320,125 398,170 398,260 320,305 242,260 242,170" fill="#CE422B"/>
+        <text x="320" y="208" text-anchor="middle" font-size="26" font-weight="800" fill="#FBF6EC">Agent</text>
+        <text x="320" y="238" text-anchor="middle" font-size="22" font-weight="600" fill="#FFD9CF">Rust</text>
+      </g>
+      <g class="pop" style="--d:4">
+        <rect x="225" y="18" width="190" height="56" rx="14" fill="#FFFDF8" stroke="#1D1B16" stroke-width="2.5"/>
+        <text x="320" y="44" text-anchor="middle" font-size="20" font-weight="700" fill="#1D1B16">Serveur</text>
+        <text x="320" y="64" text-anchor="middle" font-size="15" fill="#8A8170">stream gRPC</text>
+      </g>
+      <g class="pop" style="--d:5">
+        <rect x="10" y="187" width="150" height="56" rx="14" fill="#FFF1CC" stroke="#D97706" stroke-width="2.5"/>
+        <text x="85" y="213" text-anchor="middle" font-size="20" font-weight="700" fill="#7C4A03">GPU</text>
+        <text x="85" y="233" text-anchor="middle" font-size="15" fill="#7C4A03">nvidia-smi</text>
+      </g>
+      <g class="pop" style="--d:6">
+        <rect x="470" y="187" width="160" height="56" rx="14" fill="#E1F3F0" stroke="#0F766E" stroke-width="2.5"/>
+        <text x="550" y="213" text-anchor="middle" font-size="20" font-weight="700" fill="#0F766E">Python</text>
+        <text x="550" y="233" text-anchor="middle" font-size="15" fill="#0F766E">PyTorch</text>
+      </g>
+      <g class="pop" style="--d:7">
+        <rect x="225" y="356" width="190" height="56" rx="14" fill="#EDE4FF" stroke="#7C3AED" stroke-width="2.5"/>
+        <text x="320" y="382" text-anchor="middle" font-size="20" font-weight="700" fill="#5B21B6">SQLite</text>
+        <text x="320" y="402" text-anchor="middle" font-size="15" fill="#5B21B6">messages à renvoyer</text>
+      </g>
+    </svg>
+    <div class="grow" style="display:flex; flex-direction:column; gap:16px;">
+      <div class="step up" style="--d:4"><span class="num">1</span><p class="text">Il <b>ouvre lui-même</b> la connexion au serveur et envoie l’état du PC toutes les 10&nbsp;s.</p></div>
+      <div class="step up" style="--d:5"><span class="num">2</span><p class="text">Il récupère code et données (<b>SHA-256 vérifié</b>, cache local), puis lance le script Python.</p></div>
+      <div class="step up" style="--d:6"><span class="num">3</span><p class="text">Il lit <span class="mono" style="font-size:19px">PROGRESS · CHECKPOINT · DONE</span> et rapporte l’avancement.</p></div>
+      <div class="step up" style="--d:7"><span class="num">4</span><p class="text">Après une coupure, il se reconnecte seul et <b>renvoie ce qui n’a pas été reçu</b>.</p></div>
+      <div class="row up" style="--d:8; gap:8px; flex-wrap:wrap;">
+        <span class="pill mono" style="font-size:16px">tokio</span><span class="pill mono" style="font-size:16px">tonic · gRPC</span>
+        <span class="pill mono" style="font-size:16px">prost</span><span class="pill mono" style="font-size:16px">rusqlite</span>
+        <span class="pill mono" style="font-size:16px">sysinfo</span><span class="pill mono" style="font-size:16px">sha2</span>
+        <span class="pill mono" style="font-size:16px">tracing</span>
+      </div>
+    </div>
+  </div>
+  <aside class="notes" data-title="L’agent Rust" data-time="50 s">
+    <p>Sur chaque PC du labo tourne un <b>agent écrit en Rust</b>, léger et fiable.</p>
+    <p><i>[suivre le schéma]</i> Il ouvre lui-même la connexion au serveur, en gRPC : aucun port à ouvrir sur les PC. Il mesure le GPU avec nvidia-smi et envoie l’état du PC toutes les 10 secondes.</p>
+    <p>Quand il reçoit un job, il récupère le code et les données, vérifie leur empreinte SHA-256, puis lance le script Python. Il lit les lignes PROGRESS, CHECKPOINT et DONE, et rapporte l’avancement.</p>
+    <p>Enfin, il garde ses messages dans une base SQLite : après une coupure, il se reconnecte seul et renvoie tout ce qui n’a pas été reçu.</p>
+  </aside>
+</section>
+
+<!-- 7. Technologies -->
+<section class="slide">
+  <p class="kicker up">La stack</p>
+  <h2 class="up" style="--d:1">Chaque technologie a <span class="hl">un rôle précis</span></h2>
+  <div class="tech" style="margin-top: 22px;">
+    <div class="tgroup up" style="--d:2"><h3 style="color:#0F766E">Backend</h3>
+      <div class="tb"><b>Spring Boot</b><span>socle des 3 applications</span></div>
+      <div class="tb"><b>JPA · Hibernate</b><span>un schéma par module</span></div>
+      <div class="tb"><b>Servlet</b><span>filtres : logs, jetons</span></div>
+      <div class="tb"><b>REST</b><span>API, tableau de bord, M/P</span></div></div>
+    <div class="tgroup up" style="--d:3"><h3 style="color:#D97706">Communication</h3>
+      <div class="tb"><b>gRPC</b><span>stream serveur ↔ agents</span></div>
+      <div class="tb"><b>Kafka</b><span>événements : panne, annulation</span></div>
+      <div class="tb"><b>Resilience4j</b><span>retries, circuit breaker</span></div></div>
+    <div class="tgroup up" style="--d:4"><h3 style="color:#7C3AED">Qualité</h3>
+      <div class="tb"><b>JUnit 5 · Mockito</b><span>300+ tests unitaires</span></div>
+      <div class="tb"><b>Testcontainers</b><span>vrais PostgreSQL et Kafka</span></div>
+      <div class="tb"><b>ArchUnit</b><span>règles de la pyramide</span></div></div>
+    <div class="tgroup up" style="--d:5"><h3 style="color:#2F9E44">Exploitation</h3>
+      <div class="tb"><b>Logback JSON</b><span>logs corrélés (MDC)</span></div>
+      <div class="tb"><b>Prometheus</b><span>collecte des métriques</span></div>
+      <div class="tb"><b>Grafana</b><span>tableaux de bord</span></div>
+      <div class="tb"><b>Docker Compose</b><span>déploiement du serveur</span></div></div>
+    <div class="tgroup up" style="--d:6"><h3 style="color:#CE422B">Agent</h3>
+      <div class="tb"><b>Rust</b><span>agent léger sur chaque PC</span></div>
+      <div class="tb"><b>Tokio · Tonic</b><span>asynchrone, client gRPC</span></div>
+      <div class="tb"><b>SQLite</b><span>messages à renvoyer</span></div>
+      <div class="tb"><b>Python · PyTorch</b><span>l’entraînement</span></div></div>
+  </div>
+  <p class="text up" style="--d:6; margin-top: auto;">Toutes les technologies demandées sont utilisées pour <span class="hl">un vrai besoin du projet</span>, pas pour la forme.</p>
+  <aside class="notes" data-title="Technologies" data-time="40 s">
+    <p>Voici la stack. Côté backend : Spring Boot, JPA, les filtres Servlet et REST. Pour la communication : gRPC avec les agents, Kafka pour les événements comme une panne, et Resilience4j pour les retries et le circuit breaker.</p>
+    <p>Pour la qualité : JUnit, Mockito, Testcontainers avec de vrais PostgreSQL et Kafka, et ArchUnit. Pour l’exploitation : des logs JSON corrélés, Prometheus, Grafana et Docker Compose. Et côté agent : Rust, Tokio, Tonic, SQLite, avec Python et PyTorch pour l’entraînement.</p>
+    <p>Chaque technologie répond à un vrai besoin du projet, pas à la forme.</p>
+  </aside>
+</section>
+
+<!-- 8. Observabilité -->
+<section class="slide dark">
+  <p class="kicker up">Observabilité</p>
+  <h2 class="up" style="--d:1">Prometheus collecte, <span class="hl">Grafana affiche</span></h2>
+  <div class="row" style="flex:1; gap:22px;">
+    <div class="card up" style="--d:2; flex:1.3; display:flex; flex-direction:column;">
+      <p class="small" style="color:#BFB49C">Jobs en cours</p>
+      <svg viewBox="0 0 700 380" style="flex:1; width:100%" preserveAspectRatio="none" aria-label="Courbe des jobs en cours, avec la panne de PC-A">
+        <g stroke="#3B362C"><line x1="0" y1="95" x2="700" y2="95"/><line x1="0" y1="190" x2="700" y2="190"/><line x1="0" y1="285" x2="700" y2="285"/></g>
+        <path d="M0,300 L70,270 L140,280 L210,215 L280,225 L350,150 L420,175 L490,105 L560,135 L630,75 L700,95 L700,380 L0,380 Z" fill="url(#gHoney)" class="fade" style="--d:3"/>
+        <path d="M0,300 L70,270 L140,280 L210,215 L280,225 L350,150 L420,175 L490,105 L560,135 L630,75 L700,95" fill="none" stroke="#F2A900" stroke-width="5" class="draw" pathLength="1" style="--d:2"/>
+        <line x1="420" y1="0" x2="420" y2="380" stroke="#E5484D" stroke-width="3" stroke-dasharray="6 8" class="fade" style="--d:4"/>
+        <text x="430" y="28" font-size="22" fill="#E5484D" class="fade" style="--d:4">panne PC-A</text>
+      </svg>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:22px;">
+      <div class="card up" style="--d:3; display:flex; align-items:center; gap:24px;">
+        <svg viewBox="0 0 120 120" width="130" height="130" aria-label="Machines : 6 libres, 3 occupées, 1 hors ligne">
+          <circle cx="60" cy="60" r="44" fill="none" stroke="#3B362C" stroke-width="18"/>
+          <circle cx="60" cy="60" r="44" fill="none" stroke="#2F9E44" stroke-width="18" pathLength="100" stroke-dasharray="60 40" transform="rotate(-90 60 60)" class="fade" style="--d:3"/>
+          <circle cx="60" cy="60" r="44" fill="none" stroke="#F2A900" stroke-width="18" pathLength="100" stroke-dasharray="30 70" stroke-dashoffset="-60" transform="rotate(-90 60 60)" class="fade" style="--d:4"/>
+          <circle cx="60" cy="60" r="44" fill="none" stroke="#E5484D" stroke-width="18" pathLength="100" stroke-dasharray="10 90" stroke-dashoffset="-90" transform="rotate(-90 60 60)" class="fade" style="--d:5"/>
+          <text x="60" y="68" text-anchor="middle" font-size="26" font-weight="700" fill="#FBF6EC">10</text>
+        </svg>
+        <div style="display:flex; flex-direction:column; gap:8px; font-size:20px; color:#D9CFBA">
+          <span style="color:#BFB49C">Machines</span>
+          <span><i class="dot" style="background:#2F9E44"></i> libres · 6</span>
+          <span><i class="dot" style="background:#F2A900"></i> occupées · 3</span>
+          <span><i class="dot" style="background:#E5484D"></i> hors ligne · 1</span>
+        </div>
+      </div>
+      <div class="card up" style="--d:4; flex:1; display:flex; flex-direction:column; gap:10px;">
+        <p class="text" style="color:#D9CFBA"><b style="color:#F2A900">Micrometer</b> expose les métriques de chaque application ; <b style="color:#F2A900">Prometheus</b> les lit toutes les 15 s.</p>
+        <p class="text" style="color:#D9CFBA">Ce qu’on suit :</p>
+        <div class="row" style="gap:10px; flex-wrap:wrap;">
+          <span class="pill" style="background:#3B362C; border-color:#4A4438; color:#FBF6EC">jobs par statut</span>
+          <span class="pill" style="background:#3B362C; border-color:#4A4438; color:#FBF6EC">PC libres, occupés, morts</span>
+          <span class="pill" style="background:#3B362C; border-color:#4A4438; color:#FBF6EC">pannes et reprises</span>
+          <span class="pill" style="background:#3B362C; border-color:#4A4438; color:#FBF6EC">checkpoints vérifiés</span>
+          <span class="pill" style="background:#3B362C; border-color:#4A4438; color:#FBF6EC">circuit breakers</span>
+          <span class="pill" style="background:#3B362C; border-color:#4A4438; color:#FBF6EC">mémoire de la JVM</span>
+        </div>
+        <p class="small" style="color:#8A8170; margin-top:auto">Données d’exemple</p>
+      </div>
+    </div>
+  </div>
+  <aside class="notes" data-title="Observabilité" data-time="40 s">
+    <p>Pour surveiller le système en production, nous utilisons <b>Prometheus et Grafana</b>.</p>
+    <p>Micrometer expose les métriques de chaque application, et Prometheus les lit toutes les 15 secondes.</p>
+    <p>Grafana les affiche : les jobs en cours, l’état des PC, les pannes et reprises, les checkpoints vérifiés, les circuit breakers, la mémoire de la JVM.</p>
+    <p><i>[montrer la ligne rouge]</i> On voit ici la panne du PC-A, et le système qui continue de traiter les jobs.</p>
+    <p class="np-tip">À savoir : les graphes affichés sont des données d’exemple.</p>
+  </aside>
+</section>
+
+<!-- 10. Fin -->
+<section class="slide dark" style="justify-content:center; gap:30px;">
+  <p class="kicker up">Démonstration</p>
+  <h2 class="up" style="--d:1; font-size:84px; max-width:1200px;">On éteint un PC.<br><span class="hl">Le job continue.</span></h2>
+  <div class="steps up" style="--d:3; max-width:1250px;">
+    <div class="step"><span class="num">1</span><p class="text" style="color:#D9CFBA">Je lance un entraînement depuis mon PC.</p></div>
+    <div class="step"><span class="num">2</span><p class="text" style="color:#D9CFBA">On débranche le PC du labo qui calcule.</p></div>
+    <div class="step"><span class="num">3</span><p class="text" style="color:#D9CFBA">Le job reprend sur un autre PC, depuis son checkpoint.</p></div>
+  </div>
+  <p class="lead up" style="--d:5; color:#F2A900;">Merci · Questions ?</p>
+  <aside class="notes" data-title="Démonstration" data-time="15 s + démo">
+    <p>Passons à la démonstration. Je lance un entraînement depuis mon PC. Pendant qu’il tourne, nous allons débrancher le PC du labo qui le calcule… et vous verrez le job reprendre sur un autre PC, depuis son dernier checkpoint.</p>
+    <p><i>[faire la démo]</i> Merci de votre attention. Nous sommes prêts pour vos questions.</p>
+    <p class="np-tip">Questions probables :
+      <b>Et si mon PC s’éteint ?</b> Hypothèse de conception : le job attend son retour.
+      <b>Pourquoi pas Docker sur les PC ?</b> Exécution native imposée.
+      <b>Comment éviter un job en double ?</b> Le fencing.
+      <b>Qui fixe la mémoire GPU nécessaire ?</b> L’utilisateur, à la soumission.</p>
+  </aside>
+</section>
+
+</div>
+
+<div class="bar" id="bar"></div>
+<div class="count" id="count"></div>
+<div class="help" id="help">← → naviguer · F plein écran · N notes</div>
+<div class="notes-panel" id="notes" hidden>
+  <div class="np-head"><span><b id="np-title"></b> &nbsp;<span id="np-pos"></span></span><span id="np-time"></span><span>N : masquer</span></div>
+  <div class="np-body" id="np-body"></div>
+</div>
+
+<script>
+(() => {
+  const stage = document.getElementById("stage");
+  const slides = [...document.querySelectorAll(".slide")];
+  const bar = document.getElementById("bar");
+  const count = document.getElementById("count");
+  const notes = document.getElementById("notes");
+  let current = 0;
+
+  function fit() {
+    const height = notes.hidden ? innerHeight : innerHeight - notes.offsetHeight;
+    stage.style.setProperty("--s", Math.min(innerWidth / 1600, height / 900));
+    stage.style.top = (height / 2) + "px";
+  }
+
+  function renderNotes() {
+    const aside = slides[current].querySelector("aside.notes");
+    document.getElementById("np-title").textContent = aside ? aside.dataset.title : "";
+    document.getElementById("np-pos").textContent = (current + 1) + " / " + slides.length;
+    document.getElementById("np-time").textContent = aside ? "≈ " + aside.dataset.time : "";
+    const body = document.getElementById("np-body");
+    body.innerHTML = aside ? aside.innerHTML : "";
+    body.scrollTop = 0;
+  }
+
+  function toggleNotes() {
+    notes.hidden = !notes.hidden;
+    fit();
+    try { localStorage.setItem("computehive-notes", notes.hidden ? "0" : "1"); } catch (e) { /* stockage indisponible */ }
+  }
+
+  function countUp(slide) {
+    slide.querySelectorAll("[data-count]").forEach(el => {
+      const target = Number(el.dataset.count);
+      const start = performance.now() + 300;
+      el.textContent = "0";
+      const step = now => {
+        const t = Math.max(0, Math.min(1, (now - start) / 1200));
+        el.textContent = Math.round(target * (1 - Math.pow(1 - t, 3)));
+        if (t < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  function show(index) {
+    index = Math.max(0, Math.min(slides.length - 1, index));
+    slides[current].classList.remove("active");
+    current = index;
+    const slide = slides[current];
+    void slide.offsetWidth;            // rejoue les animations CSS
+    slide.classList.add("active");
+    countUp(slide);
+    bar.style.width = ((current + 1) / slides.length * 100) + "%";
+    count.textContent = current + 1;
+    renderNotes();
+    history.replaceState(null, "", "#" + (current + 1));
+  }
+
+  document.addEventListener("keydown", e => {
+    if (["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].includes(e.key)) { e.preventDefault(); show(current + 1); }
+    else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); show(current - 1); }
+    else if (e.key === "Home") show(0);
+    else if (e.key === "End") show(slides.length - 1);
+    else if (e.key === "n" || e.key === "N") toggleNotes();
+    else if (e.key === "f" || e.key === "F") {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.();
+    }
+  });
+  notes.addEventListener("click", e => e.stopPropagation());
+  notes.addEventListener("touchend", e => e.stopPropagation());
+  document.addEventListener("click", e => show(current + (e.clientX > innerWidth / 3 ? 1 : -1)));
+  let touchX = null;
+  document.addEventListener("touchstart", e => { touchX = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener("touchend", e => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 50) show(current + (dx < 0 ? 1 : -1));
+    touchX = null;
+  });
+  addEventListener("resize", fit);
+  setTimeout(() => document.getElementById("help").style.opacity = 0, 4000);
+
+  try { notes.hidden = localStorage.getItem("computehive-notes") !== "1"; } catch (e) { notes.hidden = true; }
+  fit();
+  const start = parseInt(location.hash.slice(1), 10);
+  slides[0].classList.add("active");
+  show(Number.isFinite(start) ? start - 1 : 0);
+})();
+</script>
+</body>
+</html>
