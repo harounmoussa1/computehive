@@ -58,6 +58,20 @@ computehive:
     startup-grace: 30s
 ```
 
+## Métriques
+
+`MachineMetrics` ([ADR 0014](../../docs/adr/0014-metriques-prometheus-grafana.md)) est un intercepteur `AFTER_ADD` / `AFTER_UPDATE` : inscriptions, heartbeats et
+pannes le tiennent à jour, sans que le code métier le sache.
+
+| Série Prometheus | Sens |
+|---|---|
+| `computehive_machines{status}` | PC `online`, `busy`, `dead`, lus en base à chaque collecte |
+| `computehive_machines_failures_total` | PC déclarés morts |
+| `computehive_machine_gpu_memory_free_megabytes{machine}` | mémoire GPU libre annoncée par chaque PC |
+| `computehive_machine_gpu_utilization_percent{machine}` | utilisation GPU annoncée par chaque PC |
+
+Un PC mort, ou sans GPU, n'a pas de valeur GPU (`NaN`) : Grafana n'affiche pas une mémoire périmée.
+
 ## Données
 
 Schéma PostgreSQL `machines`, table `machine`, migrations Flyway dans

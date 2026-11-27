@@ -194,6 +194,21 @@ class MpEndToEndIT {
         assertThat(usage.gpuSeconds()).isPositive();
         String inbox = await(MpEndToEndIT::inbox, mails -> mails.contains("mnist-mp"), "owner notified by e-mail");
         assertThat(inbox).contains("u-1@computehive.local");
+
+        // Chaque application publie les métriques de ses modules, et l'état de ses circuits vers l'autre (ADR 0014).
+        String mainMetrics = await(() -> body(main, "/actuator/prometheus", null),
+                m -> metric(m, "computehive_jobs_finished_total", "status=\"done\"") >= 1, "metrics of app-main");
+        assertThat(metric(mainMetrics, "computehive_machines_failures_total")).isGreaterThanOrEqualTo(1);
+        assertThat(metric(mainMetrics, "resilience4j_circuitbreaker_state", "name=\"scheduling\"", "state=\"closed\""))
+                .isEqualTo(1);
+        String schedulingMetrics = body(scheduling, "/actuator/prometheus", null);
+        assertThat(metric(schedulingMetrics, "computehive_attempts_started_total", "start=\"checkpoint\""))
+                .isGreaterThanOrEqualTo(1);
+        assertThat(metric(schedulingMetrics, "computehive_attempts_ended_total", "outcome=\"lost\""))
+                .isGreaterThanOrEqualTo(1);
+        assertThat(metric(schedulingMetrics, "resilience4j_circuitbreaker_state", "name=\"jobs\"", "state=\"closed\""))
+                .isEqualTo(1);
+        assertThat(schedulingMetrics).as("jobs runs in app-main only").doesNotContain("computehive_jobs_active");
     }
 
     @Test
@@ -248,6 +263,23 @@ class MpEndToEndIT {
         HttpResponse<String> response = HTTP.send(request(app, path, token), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).as("GET %s: %s", path, response.body()).isEqualTo(200);
         return response.body();
+    }
+
+    /**
+     * Valeur d'une série de l'exposition Prometheus (somme si plusieurs séries correspondent), {@code 0} si absente.
+     *
+     * @param labels étiquettes que la série doit porter, ex. {@code status="done"}
+     */
+    private static double metric(String exposition, String name, String... labels) {
+        double sum = 0;
+        for (String line : exposition.split("\n")) {
+            boolean sameName = line.startsWith(name + "{") || line.startsWith(name + " ");
+            if (!sameName || !List.of(labels).stream().allMatch(line::contains)) {
+                continue;
+            }
+            sum += Double.parseDouble(line.substring(line.lastIndexOf(' ') + 1));
+        }
+        return sum;
     }
 
     private static int status(ApplicationProcess app, String path, String token) throws Exception {

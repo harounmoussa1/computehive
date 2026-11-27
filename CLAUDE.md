@@ -76,6 +76,7 @@ computehive/
 ├── tests/remote-contract-tests/ chaque proxy service-rest-cli contre le vrai contrôleur interne
 ├── tests/mp-end-to-end-tests/ les deux jars M/P en processus séparés (PostgreSQL, Kafka, Mailpit)
 ├── docker-compose.yml         déploiement M/P du PC serveur (jetons dans .env, cf. .env.example)
+├── observability/             Prometheus (prometheus.yml) et Grafana (source + tableau de bord provisionnés)
 ├── modules/                   (artefacts nommés <module>-<couche>, ex. jobs-service-api)
 │   ├── jobs/                  infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, service-rest-cli
 │   ├── machines/              infra, dal-api, dal-jpa, service-api, service-impl, ws-rest, service-rest-cli
@@ -193,7 +194,7 @@ Le job simulé de secours affiche les mêmes lignes sans PyTorch.
 6. ✅ Réattribution + fencing (ADR 0007) ; `quotas` ; notifications.
 7. ✅ **Jalon : serveur complet, testé avec le faux agent** (`app-modulith`, `ModulithEndToEndIT`).
 8. ✅ Stockage des checkpoints + Resilience4j ; jeton des agents (ADR 0009) ; assemblage M/P (ADR 0010) ;
-   tableau de bord (module `dashboard`, ADR 0011).
+   tableau de bord (module `dashboard`, ADR 0011) ; métriques Prometheus + Grafana (ADR 0014).
 9. Intégration avec l'agent réel du binôme ; tests de bout en bout ; documentation.
 
 ## Conventions de code (socle)
@@ -220,6 +221,10 @@ Le job simulé de secours affiche les mêmes lignes sans PyTorch.
   du `ws-rest`, `Optional` vide = `204`), protégée par le jeton interne (`InternalApiFilter`, fermée par défaut) ;
   le proxy `XxxModuleRestClient` passe par `RemoteModuleClient` (`query` = lecture retentée, `command` = retentée
   seulement si la requête n'est pas partie). Personne ne dépend d'un proxy (ArchUnit).
+- Métriques (ADR 0014) : les modules ne dépendent que de `micrometer-core` ; seules les applications ajoutent
+  `micrometer-registry-prometheus` (`/actuator/prometheus`). Les compteurs sont des intercepteurs `AFTER_*`
+  (`XxxMetrics`), jamais dans le code métier ; les états courants sont lus en base à chaque collecte. Étiquettes à
+  cardinalité bornée : jamais d'id de job ni d'utilisateur.
 - Tests : `*Test` (unitaires, surefire) ; `*IT` (Testcontainers, failsafe, ignorés sans Docker).
 - Chaque module a un `README.md` (définition de terminé).
 

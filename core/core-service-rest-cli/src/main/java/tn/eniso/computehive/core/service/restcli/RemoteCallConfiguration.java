@@ -1,5 +1,6 @@
 package tn.eniso.computehive.core.service.restcli;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -30,10 +31,14 @@ public class RemoteCallConfiguration {
                 slidingWindowSize, minimumCalls, openStateWait);
     }
 
-    /** Reprend le {@code RestClient.Builder} de Spring Boot s'il existe (mêmes réglages JSON que les contrôleurs). */
+    /**
+     * Reprend le {@code RestClient.Builder} de Spring Boot s'il existe (mêmes réglages JSON que les contrôleurs), et
+     * le registre de métriques de l'application s'il y en a un (ADR 0014).
+     */
     @Bean
     RemoteModuleClients remoteModuleClients(ObjectProvider<RestClient.Builder> builder, InternalToken token,
-                                            RemoteCallPolicy policy) {
-        return new RemoteModuleClients(builder.getIfAvailable(RestClient::builder), token, policy);
+                                            RemoteCallPolicy policy, ObjectProvider<MeterRegistry> meters) {
+        return new RemoteModuleClients(builder.getIfAvailable(RestClient::builder), token, policy,
+                meters.getIfAvailable());
     }
 }

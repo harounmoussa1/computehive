@@ -245,6 +245,35 @@ class ModulithEndToEndIT {
         assertThat(usage.priority()).isLessThan(1.0);
         await(() -> List.copyOf(notifications.list), events -> events.stream().map(ILoggingEvent::getFormattedMessage)
                 .anyMatch(m -> m.contains("[job.done]") && m.contains("u-1") && m.contains("mnist-e2e")), "owner notified");
+
+        // Prometheus voit la panne et la reprise (ADR 0014). Le contexte est partagé par les tests : au moins 1.
+        await(() -> rest.getForObject("/actuator/prometheus", String.class), metrics ->
+                metric(metrics, "computehive_machines_failures_total") >= 1
+                        && metric(metrics, "computehive_attempts_ended_total", "outcome=\"lost\"") >= 1
+                        && metric(metrics, "computehive_attempts_started_total", "start=\"checkpoint\"") >= 1
+                        && metric(metrics, "computehive_jobs_reassigned_total") >= 1
+                        && metric(metrics, "computehive_jobs_finished_total", "status=\"done\"") >= 1
+                        && metric(metrics, "computehive_agent_messages_total",
+                        "type=\"checkpoint_saved\"", "outcome=\"accepted\"") >= 1
+                        && metric(metrics, "computehive_machines", "status=\"dead\"") >= 1,
+                "crash and resume visible on /actuator/prometheus");
+    }
+
+    /**
+     * Valeur d'une série de l'exposition Prometheus (somme si plusieurs séries correspondent), {@code 0} si absente.
+     *
+     * @param labels étiquettes que la série doit porter, ex. {@code status="done"}
+     */
+    private static double metric(String exposition, String name, String... labels) {
+        double sum = 0;
+        for (String line : exposition.split("\n")) {
+            boolean sameName = line.startsWith(name + "{") || line.startsWith(name + " ");
+            if (!sameName || !List.of(labels).stream().allMatch(line::contains)) {
+                continue;
+            }
+            sum += Double.parseDouble(line.substring(line.lastIndexOf(' ') + 1));
+        }
+        return sum;
     }
 
     @Test

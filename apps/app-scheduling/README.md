@@ -41,4 +41,11 @@ mortes des machines dont les heartbeats n'ont pas pu arriver pendant la coupure.
 | `CHECKPOINT_STORE_LATENCY`, `CHECKPOINT_STORE_FAILURE_RATE` | `50ms`, `0.0` : comportement du stockage distant simulé |
 
 Le stockage des checkpoints est simulé, en mémoire. Avec `CHECKPOINT_STORE_FAILURE_RATE=0.3`, on voit les
-retries et le circuit breaker de Resilience4j à l'œuvre. Un redémarrage perd les fichiers.
+retries et le circuit breaker de Resilience4j à l'œuvre, y compris dans Grafana (graphes « Circuit breakers » et
+« Retries »). Un redémarrage perd les fichiers.
+
+## Métriques
+
+`GET /actuator/prometheus` expose les métriques de scheduling (tentatives, agents connectés, messages des agents),
+l'état des circuits vers jobs, machines, quotas et le stockage des checkpoints, et celles de la JVM
+([ADR 0014](../../docs/adr/0014-metriques-prometheus-grafana.md)).

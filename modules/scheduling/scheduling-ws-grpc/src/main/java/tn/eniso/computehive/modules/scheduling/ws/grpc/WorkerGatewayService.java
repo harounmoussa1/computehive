@@ -16,7 +16,10 @@ import tn.eniso.computehive.core.infra.exception.ValidationException;
 import tn.eniso.computehive.core.infra.log.LogKeys;
 import tn.eniso.computehive.modules.scheduling.infra.agent.AgentHello;
 import tn.eniso.computehive.modules.scheduling.infra.agent.AgentRegistered;
+import tn.eniso.computehive.modules.scheduling.infra.agent.MessageOutcome;
 import tn.eniso.computehive.modules.scheduling.service.api.SchedulingModule;
+
+import java.util.function.Supplier;
 
 /**
  * Porte d'entrée des agents : {@code WorkerGateway.Connect}. L'agent ouvre lui-même le stream
@@ -32,6 +35,8 @@ import tn.eniso.computehive.modules.scheduling.service.api.SchedulingModule;
  *   <li>Un heartbeat d'une machine inconnue ferme le stream ({@code NOT_FOUND}) : l'agent se reconnecte et se
  *       réinscrit.</li>
  * </ul>
+ *
+ * <p>L'issue de chaque message est comptée ({@link GatewayMetrics}).</p>
  */
 @Component
 public class WorkerGatewayService extends WorkerGatewayGrpc.WorkerGatewayImplBase {
@@ -40,10 +45,12 @@ public class WorkerGatewayService extends WorkerGatewayGrpc.WorkerGatewayImplBas
 
     private final SchedulingModule scheduling;
     private final AgentSessionRegistry sessions;
+    private final GatewayMetrics metrics;
 
-    public WorkerGatewayService(SchedulingModule scheduling, AgentSessionRegistry sessions) {
+    public WorkerGatewayService(SchedulingModule scheduling, AgentSessionRegistry sessions, GatewayMetrics metrics) {
         this.scheduling = scheduling;
         this.sessions = sessions;
+        this.metrics = metrics;
     }
 
     @Override
@@ -111,6 +118,7 @@ public class WorkerGatewayService extends WorkerGatewayGrpc.WorkerGatewayImplBas
          */
         private void register(AgentMessage message) {
             if (!message.hasRegister()) {
+                metrics.received(message, GatewayMetrics.REJECTED);
                 refuse(Status.FAILED_PRECONDITION.withDescription("the first message of a stream must be Register"));
                 return;
             }
@@ -120,20 +128,31 @@ public class WorkerGatewayService extends WorkerGatewayGrpc.WorkerGatewayImplBas
                 hello = ProtoTranslator.toHello(message.getRegister());
                 registered = scheduling.registerAgent(hello);
             } catch (ValidationException e) {
+                metrics.received(message, GatewayMetrics.REJECTED);
                 refuse(Status.INVALID_ARGUMENT.withDescription(e.getMessage()));
                 return;
             } catch (RemoteModuleUnavailableException e) {
                 // M/P : machines est injoignable. UNAVAILABLE dit à l'agent de se reconnecter plus tard.
+                metrics.received(message, GatewayMetrics.UNAVAILABLE);
                 log.warn("Registration of agent {} postponed: {}", message.getRegister().getAgentId(), e.getMessage());
                 refuse(Status.UNAVAILABLE.withDescription("server temporarily unavailable, retry later"));
                 return;
             }
+            metrics.received(message, MessageOutcome.ACCEPTED);
             session = new AgentSession(registered.machineId(), responses);
             sessions.open(session);
             session.send(ProtoTranslator.toRegistered(registered));
             MDC.put(LogKeys.WORKER_ID, registered.machineId());
             log.info("Agent {} connected as machine {}", hello.agentId(), registered.machineId());
-            safely(message, () -> scheduling.resynchronize(registered.machineId(), hello.running()));
+            // La resynchronisation fait partie de l'inscription, déjà comptée : un échec est seulement journalisé,
+            // et le heartbeat suivant la refait.
+            try {
+                scheduling.resynchronize(registered.machineId(), hello.running());
+            } catch (ComputeHiveException e) {
+                log.warn("Resynchronization of machine {} rejected: {}", registered.machineId(), e.getMessage());
+            } catch (RuntimeException e) {
+                log.error("Resynchronization of machine {} failed", registered.machineId(), e);
+            }
         }
 
         private void dispatch(AgentMessage message) {
@@ -142,10 +161,13 @@ public class WorkerGatewayService extends WorkerGatewayGrpc.WorkerGatewayImplBas
             switch (message.getPayloadCase()) {
                 case HEARTBEAT -> {
                     try {
-                        scheduling.heartbeat(machineId, ProtoTranslator.toHeartbeat(message.getHeartbeat()));
+                        metrics.received(message,
+                                scheduling.heartbeat(machineId, ProtoTranslator.toHeartbeat(message.getHeartbeat())));
                     } catch (NotFoundException e) {
+                        metrics.received(message, GatewayMetrics.REJECTED);
                         closeUnknownMachine();
                     } catch (ComputeHiveException e) {
+                        metrics.received(message, GatewayMetrics.REJECTED);
                         log.warn("Heartbeat of machine {} rejected: {}", machineId, e.getMessage());
                     }
                 }
@@ -157,18 +179,30 @@ public class WorkerGatewayService extends WorkerGatewayGrpc.WorkerGatewayImplBas
                         ProtoTranslator.toFinished(message.getFinished())));
                 case COMMAND_ACK -> safely(message, () -> scheduling.acknowledge(machineId, messageId,
                         ProtoTranslator.toAck(message.getCommandAck())));
-                case REGISTER -> log.warn("Machine {} sent Register again on the same stream: ignored", machineId);
-                case PAYLOAD_NOT_SET -> log.warn("Empty message {} from machine {} ignored", messageId, machineId);
+                case REGISTER -> {
+                    metrics.received(message, MessageOutcome.IGNORED);
+                    log.warn("Machine {} sent Register again on the same stream: ignored", machineId);
+                }
+                case PAYLOAD_NOT_SET -> {
+                    metrics.received(message, MessageOutcome.IGNORED);
+                    log.warn("Empty message {} from machine {} ignored", messageId, machineId);
+                }
             }
         }
 
         /** Un message refusé ou en échec est journalisé ; le stream reste ouvert pour les messages suivants. */
-        private void safely(AgentMessage message, Runnable call) {
+        private void safely(AgentMessage message, Supplier<MessageOutcome> call) {
             try {
-                call.run();
+                metrics.received(message, call.get());
+            } catch (RemoteModuleUnavailableException e) {
+                metrics.received(message, GatewayMetrics.UNAVAILABLE);
+                log.warn("{} message {} not processed, a module is unreachable; the agent may send it again: {}",
+                        message.getPayloadCase(), message.getMessageId(), e.getMessage());
             } catch (ComputeHiveException e) {
+                metrics.received(message, GatewayMetrics.REJECTED);
                 log.warn("{} message {} rejected: {}", message.getPayloadCase(), message.getMessageId(), e.getMessage());
             } catch (RuntimeException e) {
+                metrics.received(message, GatewayMetrics.FAILED);
                 log.error("{} message {} failed; the agent may send it again", message.getPayloadCase(),
                         message.getMessageId(), e);
             }

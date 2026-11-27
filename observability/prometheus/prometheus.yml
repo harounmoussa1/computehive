@@ -1,0 +1,14 @@
+# Prometheus du PC serveur (ADR 0014) : lit toutes les 15 s les métriques des deux applications M/P, exposées par
+# Micrometer sur /actuator/prometheus. Chaque série porte l'étiquette "application" (computehive-main,
+# computehive-scheduling), ajoutée par les applications elles-mêmes.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: computehive
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - app-main:8080
+          - app-scheduling:8081

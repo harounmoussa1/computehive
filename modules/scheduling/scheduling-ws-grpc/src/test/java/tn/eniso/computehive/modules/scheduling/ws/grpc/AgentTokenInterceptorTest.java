@@ -8,6 +8,7 @@ import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.MetadataUtils;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -45,9 +46,11 @@ class AgentTokenInterceptorTest {
         when(scheduling.registerAgent(any()))
                 .thenReturn(new AgentRegistered("machine-a1", Duration.ofSeconds(10), Duration.ofSeconds(30)));
         String name = UUID.randomUUID().toString();
+        AgentSessionRegistry sessions = new AgentSessionRegistry();
+        WorkerGatewayService gateway = new WorkerGatewayService(scheduling, sessions,
+                new GatewayMetrics(new SimpleMeterRegistry(), sessions));
         servers.add(InProcessServerBuilder.forName(name).directExecutor()
-                .addService(ServerInterceptors.intercept(new WorkerGatewayService(scheduling, new AgentSessionRegistry()),
-                        new AgentTokenInterceptor(token)))
+                .addService(ServerInterceptors.intercept(gateway, new AgentTokenInterceptor(token)))
                 .build().start());
         InProcessChannelBuilder channel = InProcessChannelBuilder.forName(name).directExecutor();
         if (presented != null) {

@@ -1,0 +1,12 @@
+# Tableaux de bord chargés au démarrage de Grafana depuis observability/grafana/dashboards (ADR 0014). Ils sont
+# versionnés avec le code : une modification faite dans Grafana n'est pas enregistrée, il faut exporter le JSON.
+apiVersion: 1
+
+providers:
+  - name: computehive
+    folder: ComputeHive
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards

@@ -5,6 +5,8 @@ import io.grpc.Server;
 import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +34,7 @@ import tn.eniso.computehive.modules.scheduling.infra.agent.AgentRegistered;
 import tn.eniso.computehive.modules.scheduling.infra.agent.CheckpointReport;
 import tn.eniso.computehive.modules.scheduling.infra.agent.CommandAckReport;
 import tn.eniso.computehive.modules.scheduling.infra.agent.FinishedReport;
+import tn.eniso.computehive.modules.scheduling.infra.agent.MessageOutcome;
 import tn.eniso.computehive.modules.scheduling.infra.agent.ProgressReport;
 import tn.eniso.computehive.modules.scheduling.infra.agent.RunningAttempt;
 import tn.eniso.computehive.modules.scheduling.service.api.SchedulingModule;
@@ -56,8 +59,13 @@ import static org.mockito.Mockito.when;
  */
 class WorkerGatewayServiceTest {
 
-    private final SchedulingModule scheduling = Mockito.mock(SchedulingModule.class);
+    /** Fausse façade : chaque message d'agent est accepté, sauf réponse contraire du test. */
+    private final SchedulingModule scheduling = Mockito.mock(SchedulingModule.class, call ->
+            call.getMethod().getReturnType() == MessageOutcome.class
+                    ? MessageOutcome.ACCEPTED
+                    : Mockito.RETURNS_DEFAULTS.answer(call));
     private final AgentSessionRegistry sessions = new AgentSessionRegistry();
+    private final MeterRegistry meters = new SimpleMeterRegistry();
     private Server server;
     private ManagedChannel channel;
 
@@ -67,7 +75,8 @@ class WorkerGatewayServiceTest {
                 "machine-" + call.<AgentHello>getArgument(0).agentId(), Duration.ofSeconds(10), Duration.ofSeconds(30)));
         String name = UUID.randomUUID().toString();
         server = InProcessServerBuilder.forName(name).directExecutor()
-                .addService(new WorkerGatewayService(scheduling, sessions)).build().start();
+                .addService(new WorkerGatewayService(scheduling, sessions, new GatewayMetrics(meters, sessions)))
+                .build().start();
         channel = InProcessChannelBuilder.forName(name).directExecutor().build();
     }
 
@@ -212,6 +221,43 @@ class WorkerGatewayServiceTest {
 
         assertThat(agent.closedStatus().getCode()).isEqualTo(Status.Code.NOT_FOUND);
         assertThat(sessions.isConnected("machine-a1")).isFalse();
+    }
+
+    // ───────────────────────── Métriques ─────────────────────────
+
+    private double messages(String type, String outcome) {
+        var counter = meters.find("computehive.agent.messages").tags("type", type, "outcome", outcome).counter();
+        return counter == null ? 0 : counter.count();
+    }
+
+    @Test
+    void eachMessageIsCountedWithTheOutcomeGivenByTheFacade() throws Exception {
+        when(scheduling.reportProgress(anyString(), anyString(), any())).thenReturn(MessageOutcome.STALE);
+        when(scheduling.reportFinished(anyString(), anyString(), any()))
+                .thenThrow(new ConflictException("job not running"));
+        TestAgent agent = connected("a1");
+
+        agent.send(AgentMessage.newBuilder().setHeartbeat(Heartbeat.getDefaultInstance()));
+        agent.send(AgentMessage.newBuilder().setProgress(Progress.newBuilder().setJobId("j-7").setAttemptId(1)));
+        agent.send(AgentMessage.newBuilder().setFinished(Finished.newBuilder().setJobId("j-7").setAttemptId(1)));
+
+        assertThat(messages("register", "accepted")).isEqualTo(1);
+        assertThat(messages("heartbeat", "accepted")).isEqualTo(1);
+        assertThat(messages("progress", "stale")).isEqualTo(1);
+        assertThat(messages("finished", "rejected")).isEqualTo(1);
+        assertThat(meters.get("computehive.agents.connected").gauge().value()).isEqualTo(1);
+    }
+
+    @Test
+    void aRefusedRegistrationIsCountedWithItsCause() throws Exception {
+        doThrow(new RemoteModuleUnavailableException("machines", "timeout")).when(scheduling).registerAgent(any());
+        TestAgent agent = new TestAgent(channel);
+
+        agent.send(AgentMessage.newBuilder().setRegister(Register.newBuilder().setAgentId("agent-a").setName("pc-a")));
+
+        assertThat(agent.closedStatus().getCode()).isEqualTo(Status.Code.UNAVAILABLE);
+        assertThat(messages("register", "unavailable")).isEqualTo(1);
+        assertThat(meters.get("computehive.agents.connected").gauge().value()).isZero();
     }
 
     // ───────────────────────── Module → agent ─────────────────────────

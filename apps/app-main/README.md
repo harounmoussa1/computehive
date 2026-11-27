@@ -51,6 +51,8 @@ mémoire ici.
 | `HOTE:9090` (gRPC) et `http://HOTE:8081` (checkpoints) | agents des PC du laboratoire |
 | `http://HOTE:8025` | Mailpit : les e-mails envoyés aux utilisateurs |
 | `localhost:5434` | PostgreSQL, pour pgAdmin (utilisateur et base `computehive`) |
+| `http://HOTE:3000` | **Grafana** : tableau de bord ComputeHive, sans compte ([ADR 0014](../../docs/adr/0014-metriques-prometheus-grafana.md)) |
+| `http://HOTE:9091` | Prometheus : requêtes PromQL, état des cibles (`Status > Targets`) |
 
 Les logs sont en JSON (`correlationId`, `jobId`, `workerId`) :
 
@@ -72,6 +74,10 @@ Environ 30 secondes plus tard (durée du bail), `app-main` déclare le PC mort e
 job sur le tableau de bord montre les deux tentatives : la première `Perdue`, la seconde « reprise depuis le
 checkpoint de l'epoch N ».
 
+Dans Grafana (`http://HOTE:3000`), la même panne se lit sur les graphes : `PC hors ligne` passe à 1, une tentative
+`perdue` apparaît, puis une `reprise depuis un checkpoint`. Les jobs passent de `running` à `reassigned`, puis de
+nouveau à `running`. Prometheus lit les applications toutes les 15 s : compter jusqu'à 15 s d'écart.
+
 Arrêter : `docker compose --profile demo down`. Ajouter `-v` pour effacer aussi la base et Kafka.
 
 ## Variables
@@ -87,6 +93,10 @@ Arrêter : `docker compose --profile demo down`. Ajouter `-v` pour effacer aussi
 
 Les appels vers scheduling se règlent par `computehive.remote.*` : délais, retries et circuit breaker
 (`RemoteCallConfiguration`).
+
+Les métriques des modules jobs et machines, celles de la JVM, des requêtes HTTP, et l'état du circuit vers
+scheduling sont exposés sur `GET /actuator/prometheus`. Le mot de passe du compte admin de Grafana se règle par
+`GRAFANA_ADMIN_PASSWORD` dans `.env` (`admin` par défaut).
 
 ## Tests
 

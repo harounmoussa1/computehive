@@ -1,0 +1,14 @@
+# Source de données créée au démarrage de Grafana (ADR 0014). L'uid "prometheus" est celui qu'utilise le tableau
+# de bord ComputeHive.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s

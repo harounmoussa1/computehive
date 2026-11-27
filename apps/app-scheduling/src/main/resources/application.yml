@@ -23,7 +23,16 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # prometheus : métriques lues par Prometheus toutes les 15 s (ADR 0014)
+        include: health,info,prometheus
+  metrics:
+    tags:
+      # Distingue les applications dans Prometheus et Grafana.
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        # Durées des requêtes HTTP en histogramme : Grafana en calcule le 95e centile.
+        http.server.requests: true
 
 computehive:
   agents:

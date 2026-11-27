@@ -1,6 +1,8 @@
 package tn.eniso.computehive.drivers.storageremote;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import tn.eniso.computehive.core.infra.exception.NotFoundException;
 import tn.eniso.computehive.extensions.checkpoints.api.CheckpointKey;
@@ -115,5 +117,20 @@ class RemoteCheckpointStoreTest {
         assertThat(store.find(KEY)).isPresent();
         assertThat(store.find(KEY)).isPresent();
         assertThat(store.circuitState()).isEqualTo(CircuitBreaker.State.CLOSED);
+    }
+
+    @Test
+    void theCircuitStateAndTheRetriesArePublishedAsMetrics() {
+        MeterRegistry meters = new SimpleMeterRegistry();
+        RemoteCheckpointStore store = new RemoteCheckpointStore(new FlakyBucket(2), FAST, Clock.systemUTC());
+        store.bindTo(meters);
+
+        store.store(KEY, content("weights"));
+
+        assertThat(meters.get("resilience4j.circuitbreaker.state")
+                .tags("name", "checkpoint-storage", "state", "closed").gauge().value()).isEqualTo(1);
+        assertThat(meters.get("resilience4j.retry.calls")
+                .tags("name", "checkpoint-storage", "kind", "successful_with_retry").functionCounter().count())
+                .isEqualTo(1);
     }
 }

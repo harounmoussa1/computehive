@@ -3,9 +3,14 @@ package tn.eniso.computehive.drivers.storageremote;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.core.IntervalFunction;
+import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;
+import io.github.resilience4j.micrometer.tagged.TaggedRetryMetrics;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
+import io.github.resilience4j.retry.RetryRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tn.eniso.computehive.core.infra.exception.NotFoundException;
@@ -41,16 +46,20 @@ import java.util.function.Supplier;
 public class RemoteCheckpointStore implements CheckpointStore {
 
     private static final Logger log = LoggerFactory.getLogger(RemoteCheckpointStore.class);
+    private static final String NAME = "checkpoint-storage";
 
     private final SimulatedRemoteBucket bucket;
     private final Clock clock;
+    /** Registres d'un seul élément : c'est par eux que Resilience4j publie ses métriques ({@link #bindTo}). */
+    private final RetryRegistry retries;
+    private final CircuitBreakerRegistry circuits;
     private final Retry retry;
     private final CircuitBreaker circuit;
 
     public RemoteCheckpointStore(SimulatedRemoteBucket bucket, RemoteStorageProperties properties, Clock clock) {
         this.bucket = bucket;
         this.clock = clock;
-        this.circuit = CircuitBreaker.of("checkpoint-storage", CircuitBreakerConfig.custom()
+        this.circuits = CircuitBreakerRegistry.of(CircuitBreakerConfig.custom()
                 .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
                 .slidingWindowSize(properties.circuitWindowSize())
                 .minimumNumberOfCalls(Math.min(5, properties.circuitWindowSize()))
@@ -59,12 +68,14 @@ public class RemoteCheckpointStore implements CheckpointStore {
                 .permittedNumberOfCallsInHalfOpenState(2)
                 .recordExceptions(RemoteUnavailableException.class)
                 .build());
-        this.retry = Retry.of("checkpoint-storage", RetryConfig.custom()
+        this.circuit = circuits.circuitBreaker(NAME);
+        this.retries = RetryRegistry.of(RetryConfig.custom()
                 .maxAttempts(properties.retryMaxAttempts())
                 .intervalFunction(IntervalFunction.ofExponentialBackoff(properties.retryWait(), 2))
                 .retryExceptions(RemoteUnavailableException.class)
                 .ignoreExceptions(CallNotPermittedException.class)
                 .build());
+        this.retry = retries.retry(NAME);
         circuit.getEventPublisher().onStateTransition(event ->
                 log.warn("Remote checkpoint storage circuit {}", event.getStateTransition()));
         retry.getEventPublisher().onRetry(event ->
@@ -107,6 +118,15 @@ public class RemoteCheckpointStore implements CheckpointStore {
     /** État du circuit ({@code CLOSED}, {@code OPEN}, {@code HALF_OPEN}), pour la supervision et les tests. */
     public CircuitBreaker.State circuitState() {
         return circuit.getState();
+    }
+
+    /**
+     * Publie l'état du circuit et les résultats des appels ({@code resilience4j_circuitbreaker_*},
+     * {@code resilience4j_retry_*}, étiquette {@code name="checkpoint-storage"} ; ADR 0014).
+     */
+    public void bindTo(MeterRegistry registry) {
+        TaggedCircuitBreakerMetrics.ofCircuitBreakerRegistry(circuits).bindTo(registry);
+        TaggedRetryMetrics.ofRetryRegistry(retries).bindTo(registry);
     }
 
     private <T> T resilient(String operation, Supplier<T> call) {
