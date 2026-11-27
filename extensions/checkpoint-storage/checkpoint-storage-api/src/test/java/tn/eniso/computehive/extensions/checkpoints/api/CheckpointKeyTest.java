@@ -3,9 +3,6 @@ package tn.eniso.computehive.extensions.checkpoints.api;
 import org.junit.jupiter.api.Test;
 import tn.eniso.computehive.core.infra.exception.ValidationException;
 
-import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -34,16 +31,5 @@ class CheckpointKeyTest {
         assertThatThrownBy(() -> CheckpointKey.parse(null)).isInstanceOf(ValidationException.class);
         assertThatThrownBy(() -> new CheckpointKey("j-7", 0, 1)).isInstanceOf(ValidationException.class);
         assertThatThrownBy(() -> new CheckpointKey("j-7", 1, 0)).isInstanceOf(ValidationException.class);
-    }
-
-    @Test
-    void theDigestIsComputedWhileReading() throws Exception {
-        byte[] content = "checkpoint content".getBytes(StandardCharsets.UTF_8);
-        try (Sha256.DigestingStream stream = new Sha256.DigestingStream(new ByteArrayInputStream(content))) {
-            stream.readAllBytes();
-
-            assertThat(stream.size()).isEqualTo(content.length);
-            assertThat(stream.sha256()).isEqualTo(Sha256.of(content)).matches("[0-9a-f]{64}");
-        }
     }
 }

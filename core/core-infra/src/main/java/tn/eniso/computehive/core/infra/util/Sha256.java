@@ -1,4 +1,4 @@
-package tn.eniso.computehive.extensions.checkpoints.api;
+package tn.eniso.computehive.core.infra.util;
 
 import java.io.FilterInputStream;
 import java.io.IOException;
@@ -8,7 +8,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
 /**
- * Calcul du SHA-256 pendant la lecture d'un flux, commun aux drivers : le contenu n'est lu qu'une fois,
+ * Calcul du SHA-256 pendant la lecture d'un flux, commun aux stockages de fichiers : le contenu n'est lu qu'une fois,
  * même pour un gros checkpoint.
  */
 public final class Sha256 {
