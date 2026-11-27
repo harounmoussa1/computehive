@@ -131,9 +131,9 @@ class RemoteCheckpointStoreTest {
         store.store(KEY, content("weights"));
 
         assertThat(meters.get("resilience4j.circuitbreaker.state")
-                .tags("name", "checkpoint-storage", "state", "closed").gauge().value()).isEqualTo(1);
+                .tags("name", "object-storage", "state", "closed").gauge().value()).isEqualTo(1);
         assertThat(meters.get("resilience4j.retry.calls")
-                .tags("name", "checkpoint-storage", "kind", "successful_with_retry").functionCounter().count())
+                .tags("name", "object-storage", "kind", "successful_with_retry").functionCounter().count())
                 .isEqualTo(1);
     }
 

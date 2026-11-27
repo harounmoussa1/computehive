@@ -82,11 +82,14 @@ public class S3RemoteBucket implements RemoteBucket {
     }
 
     @Override
-    public Optional<InputStream> open(String key) {
+    public Optional<InputStream> open(String key, long offset) {
         return call("open " + key, () -> {
             try {
-                return Optional.<InputStream>of(
-                        client.getObject(GetObjectArgs.builder().bucket(bucket).object(key).build()));
+                GetObjectArgs.Builder request = GetObjectArgs.builder().bucket(bucket).object(key);
+                if (offset > 0) {
+                    request.offset(offset);
+                }
+                return Optional.<InputStream>of(client.getObject(request.build()));
             } catch (ErrorResponseException e) {
                 return missing(e);
             }

@@ -18,5 +18,6 @@
         <module>messaging-broker</module>
         <module>notifications</module>
         <module>checkpoint-storage</module>
+        <module>file-storage</module>
     </modules>
 </project>

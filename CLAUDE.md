@@ -88,7 +88,9 @@ computehive/
 ├── extensions/                contrats techniques (les modules ne dépendent que de ça)
 │   ├── messaging-broker/      messaging-broker-api
 │   ├── notifications/         notifications-api
-│   └── checkpoint-storage/    checkpoint-storage-api, checkpoint-storage-ws-rest (dépôt des checkpoints par l'agent)
+│   ├── checkpoint-storage/    checkpoint-storage-api, checkpoint-storage-ws-rest (dépôt des checkpoints par l'agent)
+│   └── file-storage/          file-storage-api, file-storage-ws-rest (fichiers des utilisateurs, rangés sous leur SHA-256 ;
+│                              GET /api/files/{key} avec Range pour l'agent)
 ├── drivers/                   driver-broker-memory, driver-broker-kafka, driver-notif-log,
 │                              driver-notif-email, driver-storage-local, driver-storage-remote
 ├── apps/

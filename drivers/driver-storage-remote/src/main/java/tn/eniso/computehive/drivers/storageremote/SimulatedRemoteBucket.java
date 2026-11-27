@@ -61,9 +61,13 @@ public class SimulatedRemoteBucket implements RemoteBucket {
     }
 
     @Override
-    public Optional<InputStream> open(String key) {
+    public Optional<InputStream> open(String key, long offset) {
         call();
-        return Optional.ofNullable(objects.get(key)).map(object -> new ByteArrayInputStream(object.content()));
+        return Optional.ofNullable(objects.get(key)).map(object -> {
+            byte[] content = object.content();
+            int start = (int) Math.min(offset, content.length);
+            return new ByteArrayInputStream(content, start, content.length - start);
+        });
     }
 
     public void setAvailable(boolean available) {

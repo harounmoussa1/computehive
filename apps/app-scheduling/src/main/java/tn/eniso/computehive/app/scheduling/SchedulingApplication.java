@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
 import org.springframework.context.annotation.Import;
 import tn.eniso.computehive.drivers.brokerkafka.KafkaBrokerConfiguration;
-import tn.eniso.computehive.drivers.storageremote.RemoteCheckpointStoreConfiguration;
+import tn.eniso.computehive.drivers.storageremote.RemoteStorageConfiguration;
 
 /**
  * ComputeHive en M/P, processus extrait : scheduling et tout ce qui parle aux agents.
@@ -18,18 +18,19 @@ import tn.eniso.computehive.drivers.storageremote.RemoteCheckpointStoreConfigura
  *       ({@code checkpoint-storage-ws-rest}) sont ici, avec {@code scheduling-service-impl} : les ordres aux agents
  *       repartent par les streams ouverts dans ce processus, et le checkpoint qu'un agent dépose est vérifié par
  *       scheduling avant de devenir officiel ;</li>
- *   <li><b>drivers</b> : Kafka (événements venus d'{@code app-main}) et le stockage S3 des checkpoints
- *       (SeaweedFS, ADR 0015).</li>
+ *   <li><b>drivers</b> : Kafka (événements venus d'{@code app-main}) et le stockage S3 des checkpoints et des
+ *       fichiers que les agents téléchargent ({@code GET /api/files/{key}}) (SeaweedFS, ADR 0015).</li>
  * </ul>
  */
 @SpringBootApplication(
         scanBasePackages = {
                 "tn.eniso.computehive.core",
                 "tn.eniso.computehive.modules",
-                "tn.eniso.computehive.extensions.checkpoints.ws"
+                "tn.eniso.computehive.extensions.checkpoints.ws",
+                "tn.eniso.computehive.extensions.files.ws"
         },
         exclude = KafkaAutoConfiguration.class)
-@Import({KafkaBrokerConfiguration.class, RemoteCheckpointStoreConfiguration.class})
+@Import({KafkaBrokerConfiguration.class, RemoteStorageConfiguration.class})
 public class SchedulingApplication {
 
     public static void main(String[] args) {

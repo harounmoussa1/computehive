@@ -246,6 +246,16 @@
         </dependency>
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
+            <artifactId>file-storage-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>file-storage-ws-rest</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
             <artifactId>driver-broker-memory</artifactId>
             <scope>test</scope>
         </dependency>

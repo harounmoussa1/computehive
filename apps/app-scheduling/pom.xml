@@ -73,6 +73,10 @@
         </dependency>
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
+            <artifactId>file-storage-ws-rest</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
             <artifactId>driver-storage-remote</artifactId>
         </dependency>
         <dependency>

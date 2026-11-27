@@ -7,20 +7,23 @@ import org.testcontainers.images.builder.Transferable;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tn.eniso.computehive.core.infra.exception.NotFoundException;
-import tn.eniso.computehive.extensions.checkpoints.api.CheckpointKey;
 import tn.eniso.computehive.core.infra.util.Sha256;
+import tn.eniso.computehive.extensions.checkpoints.api.CheckpointKey;
 import tn.eniso.computehive.extensions.checkpoints.api.StoredCheckpoint;
+import tn.eniso.computehive.extensions.files.api.FileKey;
+import tn.eniso.computehive.extensions.files.api.StoredFile;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.Clock;
+import java.util.Arrays;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Le driver sur un vrai service compatible S3 : SeaweedFS (Testcontainers), avec la même image et la même
+ * Le driver (checkpoints et fichiers) sur un vrai service compatible S3 : SeaweedFS (Testcontainers), avec la même image et la même
  * configuration d'accès que docker-compose.yml. Ignoré si Docker n'est pas disponible.
  */
 @Testcontainers(disabledWithoutDocker = true)
@@ -42,10 +45,35 @@ class S3CheckpointStoreIT {
             // Prêt quand l'API S3 répond, même par un refus (403 sans identifiants) : plus d'erreur 5xx.
             .waitingFor(Wait.forHttp("/").forPort(S3_PORT).forStatusCodeMatching(code -> code < 500));
 
-    private static RemoteCheckpointStore newStore() {
+    private static S3RemoteBucket bucket() {
         String endpoint = "http://" + SEAWEEDFS.getHost() + ":" + SEAWEEDFS.getMappedPort(S3_PORT);
-        S3RemoteBucket bucket = new S3RemoteBucket(endpoint, ACCESS_KEY, SECRET_KEY, "computehive");
-        return new RemoteCheckpointStore(bucket, RemoteStorageProperties.defaults(), Clock.systemUTC());
+        return new S3RemoteBucket(endpoint, ACCESS_KEY, SECRET_KEY, "computehive");
+    }
+
+    private static RemoteCheckpointStore newStore() {
+        return new RemoteCheckpointStore(bucket(), RemoteStorageProperties.defaults(), Clock.systemUTC());
+    }
+
+    private static RemoteFileStore newFileStore() {
+        return new RemoteFileStore(bucket(), new ResilientStorage(RemoteStorageProperties.defaults()),
+                Clock.systemUTC());
+    }
+
+    @Test
+    void aUserFileIsStoredOnceUnderItsDigestAndReadFromAnOffset() throws Exception {
+        RemoteFileStore store = newFileStore();
+        byte[] dataset = randomBytes(50_000);
+
+        StoredFile first = store.store(new ByteArrayInputStream(dataset));
+        StoredFile again = newFileStore().store(new ByteArrayInputStream(dataset));
+
+        assertThat(first.sha256()).isEqualTo(Sha256.of(dataset));
+        assertThat(again).as("same content: same file, not sent twice").isEqualTo(first);
+        assertThat(store.find(first.key())).contains(first);
+        try (InputStream rest = store.open(first.key(), 40_000)) {
+            assertThat(rest.readAllBytes()).isEqualTo(Arrays.copyOfRange(dataset, 40_000, dataset.length));
+        }
+        assertThat(store.find(new FileKey("0".repeat(64)))).isEmpty();
     }
 
     @Test

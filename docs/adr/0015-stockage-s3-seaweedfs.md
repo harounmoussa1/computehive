@@ -49,6 +49,24 @@ L'ADR 0013 ajoute un besoin : l'utilisateur dépose son code et ses datasets dep
 - L'explorateur web de SeaweedFS (`http://localhost:8888`) n'est ouvert que sur le PC serveur : il n'a pas
   d'authentification.
 
+## Complément (2026-11-28) : les fichiers des utilisateurs
+
+Pour l'ADR 0013 (codes et datasets déposés depuis le tableau de bord), une extension **`file-storage`** rejoint
+`checkpoint-storage` :
+
+- **contrat `FileStore`** : `store`, `find`, `open(clé, offset)`. La clé d'un fichier est **l'empreinte SHA-256 de son
+  contenu** (`FileKey`, objet `files/<sha256>`) : un même dataset déposé deux fois n'est stocké qu'une fois, un fichier
+  ne change jamais sous sa clé, et l'agent peut garder un cache par empreinte ;
+- **`GET /api/files/{key}`** (`file-storage-ws-rest`, jeton des agents), comme convenu dans
+  `docs/alignement-agent-v1.md` §6 : `200` ou, avec `Range: bytes=<début>-[<fin>]`, `206` pour reprendre un gros
+  téléchargement ; `416` hors du fichier ; empreinte dans `X-File-Sha256` ;
+- **les deux drivers implémentent les deux contrats** : `driver-storage-local` (dossier `data/files`, M/1) et
+  `driver-storage-remote` (S3, M/P). Côté S3, checkpoints et fichiers partagent **un seul circuit breaker**
+  (`ResilientStorage`, métriques `name="object-storage"`) : c'est le même service ;
+- `Sha256` passe dans `core-infra`, pour qu'aucune extension ne dépende d'une autre.
+
+Le propriétaire et le nom d'un fichier ne sont pas dans le stockage : ils seront dans la fiche du module `files`.
+
 ## Alternatives écartées
 
 - **MinIO** : le choix prévu par l'ADR 0008. Ses images Docker ne sont plus distribuées librement (Docker Hub et

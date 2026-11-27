@@ -40,6 +40,9 @@ public interface RemoteBucket {
     /** Description de l'objet, ou vide s'il n'existe pas. */
     Optional<ObjectInfo> stat(String key);
 
-    /** Contenu de l'objet, ou vide s'il n'existe pas. L'appelant ferme le flux. */
-    Optional<InputStream> open(String key);
+    /**
+     * Contenu de l'objet à partir de l'octet {@code offset} (0 : depuis le début), ou vide s'il n'existe pas.
+     * L'appelant ferme le flux.
+     */
+    Optional<InputStream> open(String key, long offset);
 }
