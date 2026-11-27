@@ -502,6 +502,89 @@
   </aside>
 </section>
 
+<!-- L'agent : anatomie -->
+<section class="slide">
+  <p class="kicker up">L’agent</p>
+  <h2 class="up" style="--d:1">Le rôle de l’agent : <span class="hl">4 couches</span> sur le PC</h2>
+  <div class="row" style="flex:1; gap:50px; align-items:center; margin-top:6px;">
+    <svg viewBox="0 0 780 590" width="780" height="590" aria-label="Le serveur central parle en gRPC à l’agent Rust, organisé en 4 couches (Domain, Application, Infrastructure, Storage) posées sur la machine locale ; les agents s’échangent des données en P2P TCP">
+      <g class="up" style="--d:2">
+        <rect x="140" y="0" width="500" height="72" rx="16" fill="#1D1B16"/>
+        <text x="390" y="32" text-anchor="middle" font-size="22" font-weight="700" fill="#FBF6EC" letter-spacing="1">SERVEUR CENTRAL</text>
+        <text x="390" y="56" text-anchor="middle" font-size="16" fill="#D9CFBA">Orchestrateur · API · Scheduler · Job Manager</text>
+      </g>
+      <g class="fade" style="--d:3">
+        <line x1="390" y1="74" x2="390" y2="84" stroke="#0F766E" stroke-width="3"/>
+        <polygon points="390,73 382,85 398,85" fill="#0F766E"/>
+        <rect x="225" y="84" width="330" height="30" rx="15" fill="#E1F3F0" stroke="#0F766E" stroke-width="1.5"/>
+        <text x="390" y="105" text-anchor="middle" font-size="17" font-weight="600" fill="#0F766E">gRPC · HTTP/2 · bidirectionnel</text>
+        <text x="390" y="140" text-anchor="middle" font-size="16" fill="#4A4438">Commandes · ACK · Heartbeats · Progress · Results</text>
+        <line x1="390" y1="146" x2="390" y2="152" stroke="#0F766E" stroke-width="3"/>
+        <polygon points="390,160 382,148 398,148" fill="#0F766E"/>
+      </g>
+      <g class="up" style="--d:4">
+        <rect x="0" y="160" width="780" height="306" rx="22" fill="#FFFDF8" stroke="#CE422B" stroke-width="2.5"/>
+        <text x="24" y="196" font-size="20" font-weight="800" fill="#CE422B" letter-spacing="1.5">AGENT RUST DISTRIBUÉ</text>
+        <rect x="672" y="176" width="84" height="28" rx="14" fill="#FFE3DC" stroke="#CE422B" stroke-width="1.5"/>
+        <text x="714" y="195" text-anchor="middle" font-size="16" font-weight="600" fill="#CE422B">Worker</text>
+      </g>
+      <g class="pop" style="--d:5">
+        <rect x="24" y="214" width="360" height="82" rx="14" fill="#FFF1CC" stroke="#F2D48A" stroke-width="1.5"/>
+        <text x="204" y="252" text-anchor="middle" font-size="24" font-weight="700" fill="#1D1B16" style="font-family:var(--head)">Domain</text>
+        <text x="204" y="278" text-anchor="middle" font-size="16" fill="#7C4A03">Modèles métier</text>
+      </g>
+      <g class="pop" style="--d:6">
+        <rect x="396" y="214" width="360" height="82" rx="14" fill="#FFF1CC" stroke="#F2D48A" stroke-width="1.5"/>
+        <text x="576" y="252" text-anchor="middle" font-size="24" font-weight="700" fill="#1D1B16" style="font-family:var(--head)">Application</text>
+        <text x="576" y="278" text-anchor="middle" font-size="16" fill="#7C4A03">Use cases</text>
+      </g>
+      <g class="pop" style="--d:7">
+        <rect x="24" y="304" width="360" height="82" rx="14" fill="#FFF1CC" stroke="#F2D48A" stroke-width="1.5"/>
+        <text x="204" y="342" text-anchor="middle" font-size="24" font-weight="700" fill="#1D1B16" style="font-family:var(--head)">Infrastructure</text>
+        <text x="204" y="368" text-anchor="middle" font-size="16" fill="#7C4A03">gRPC · P2P · Python</text>
+      </g>
+      <g class="pop" style="--d:8">
+        <rect x="396" y="304" width="360" height="82" rx="14" fill="#FFF1CC" stroke="#F2D48A" stroke-width="1.5"/>
+        <text x="576" y="342" text-anchor="middle" font-size="24" font-weight="700" fill="#1D1B16" style="font-family:var(--head)">Storage</text>
+        <text x="576" y="368" text-anchor="middle" font-size="16" fill="#7C4A03">SQLite · Cache · Fichiers</text>
+      </g>
+      <g class="pop" style="--d:9">
+        <rect x="24" y="398" width="732" height="56" rx="14" fill="#E1F3F0" stroke="#0F766E" stroke-width="1.5"/>
+        <text x="390" y="421" text-anchor="middle" font-size="22" font-weight="700" fill="#0F766E" style="font-family:var(--head)">Machine locale</text>
+        <text x="390" y="443" text-anchor="middle" font-size="16" fill="#0F766E">CPU · GPU · RAM · Python · PyTorch</text>
+      </g>
+      <g class="fade" style="--d:10">
+        <g stroke="#D8CBAE" stroke-width="3" stroke-dasharray="7 7"><line x1="150" y1="466" x2="150" y2="520"/><line x1="630" y1="466" x2="630" y2="520"/></g>
+        <line x1="312" y1="558" x2="468" y2="558" stroke="#0F766E" stroke-width="3" stroke-dasharray="7 6"/>
+        <polygon points="304,558 316,551 316,565" fill="#0F766E"/><polygon points="476,558 464,551 464,565" fill="#0F766E"/>
+        <rect x="335" y="526" width="110" height="26" rx="13" fill="#E1F3F0" stroke="#0F766E" stroke-width="1.5"/>
+        <text x="390" y="544" text-anchor="middle" font-size="16" font-weight="600" fill="#0F766E">P2P TCP</text>
+      </g>
+      <g class="up" style="--d:11">
+        <rect x="0" y="520" width="300" height="64" rx="14" fill="#FFFDF8" stroke="#D8CBAE" stroke-width="2"/>
+        <text x="150" y="549" text-anchor="middle" font-size="22" font-weight="700" fill="#1D1B16" style="font-family:var(--head)">Agent A</text>
+        <text x="150" y="571" text-anchor="middle" font-size="16" fill="#8A8170">Source / Worker</text>
+        <rect x="480" y="520" width="300" height="64" rx="14" fill="#FFFDF8" stroke="#D8CBAE" stroke-width="2"/>
+        <text x="630" y="549" text-anchor="middle" font-size="22" font-weight="700" fill="#1D1B16" style="font-family:var(--head)">Agent B</text>
+        <text x="630" y="571" text-anchor="middle" font-size="16" fill="#8A8170">Worker / Sink</text>
+      </g>
+    </svg>
+    <div class="grow" style="display:flex; flex-direction:column; gap:18px;">
+      <div class="step up" style="--d:4"><span class="num">1</span><p class="text"><b>Le serveur commande, l’agent exécute.</b> Un seul canal gRPC bidirectionnel : commandes, ACK, heartbeats, avancement et résultats.</p></div>
+      <div class="step up" style="--d:5"><span class="num">2</span><p class="text"><b>Domain + Application</b> : les modèles métier et les cas d’usage. C’est la logique de l’agent, indépendante de la technique.</p></div>
+      <div class="step up" style="--d:6"><span class="num">3</span><p class="text"><b>Infrastructure + Storage</b> : gRPC, P2P et Python d’un côté ; SQLite, cache et fichiers de l’autre.</p></div>
+      <div class="step up" style="--d:7"><span class="num">4</span><p class="text"><b>La machine locale</b> fournit CPU, GPU et RAM : c’est là que Python et PyTorch font l’entraînement.</p></div>
+      <div class="step up" style="--d:8"><span class="num">5</span><p class="text"><b>P2P TCP</b> : les agents s’échangent les données directement entre eux, sans repasser par le serveur.</p></div>
+    </div>
+  </div>
+  <aside class="notes" data-title="Le rôle de l’agent" data-time="50 s">
+    <p><i>[suivre le schéma de haut en bas]</i> En haut, le <b>serveur central</b> : orchestrateur, API, scheduler et gestionnaire de jobs. Il parle à l’agent par un canal <b>gRPC bidirectionnel</b> : il envoie des commandes ; l’agent répond par des ACK, des heartbeats, l’avancement et les résultats.</p>
+    <p>Dans l’agent, quatre couches. <b>Domain</b> : les modèles métier. <b>Application</b> : les cas d’usage. <b>Infrastructure</b> : tout ce qui touche l’extérieur, c’est-à-dire gRPC, P2P et Python. <b>Storage</b> : SQLite, le cache et les fichiers.</p>
+    <p>Sous l’agent, la <b>machine locale</b> : CPU, GPU, RAM, avec Python et PyTorch pour l’entraînement.</p>
+    <p>Enfin, les agents peuvent se transférer des données <b>directement entre eux</b> en P2P TCP, sans passer par le serveur.</p>
+  </aside>
+</section>
+
 <!-- 7. Technologies -->
 <section class="slide">
   <p class="kicker up">La stack</p>
