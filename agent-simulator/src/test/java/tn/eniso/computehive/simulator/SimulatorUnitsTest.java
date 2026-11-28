@@ -72,6 +72,23 @@ class SimulatorUnitsTest {
     }
 
     @Test
+    void anAgentRestartCanBeRequested() {
+        assertThat(SimulatorOptions.parse("--restart-at-epoch=4").behaviour().restartAtEpoch()).isEqualTo(4);
+    }
+
+    @Test
+    void theSimulatedScriptReadsItsEpochsAndLearningRateFromTheUserConfig() {
+        String config = "{\"batch_size\": 64, \"epochs\": 20, \"learning_rate\": 1e-3}";
+
+        assertThat(JobConfig.epochs(config)).isEqualTo(20);
+        assertThat(JobConfig.learningRate(config)).isEqualTo(0.001);
+        assertThat(JobConfig.epochs("{}")).as("default when absent").isEqualTo(JobConfig.DEFAULT_EPOCHS);
+        assertThat(JobConfig.epochs("{\"epochs\": 0}")).isEqualTo(JobConfig.DEFAULT_EPOCHS);
+        assertThat(JobConfig.epochs("{\"epochs\": 2.5}")).isEqualTo(JobConfig.DEFAULT_EPOCHS);
+        assertThat(JobConfig.learningRate("")).isEqualTo(JobConfig.DEFAULT_LEARNING_RATE);
+    }
+
+    @Test
     void theTokenComesFromTheOptionOrFromTheEnvironment() {
         assertThat(SimulatorOptions.parseWithEnvironment(null).token()).isNull();
         assertThat(SimulatorOptions.parseWithEnvironment("from-env").token()).isEqualTo("from-env");

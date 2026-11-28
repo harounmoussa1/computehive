@@ -2,6 +2,7 @@ package tn.eniso.computehive.simulator;
 
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import tn.eniso.computehive.contracts.worker.v1.Ack;
 import tn.eniso.computehive.contracts.worker.v1.AgentMessage;
 import tn.eniso.computehive.contracts.worker.v1.Registered;
 import tn.eniso.computehive.contracts.worker.v1.ServerCommand;
@@ -11,17 +12,23 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 
 /**
- * Faux serveur pour tester le faux agent : répond {@code Registered} (heartbeat toutes les secondes),
- * garde les messages reçus, et permet d'envoyer des ordres ou de couper le stream.
+ * Faux serveur pour tester le faux agent : répond {@code Registered} (heartbeat toutes les secondes, bail de 3 s),
+ * acquitte comme le vrai serveur les heartbeats et les messages durables ({@code Ack}), garde les messages reçus,
+ * et permet d'envoyer des ordres, de couper le stream ou de se taire.
  */
 final class FakeGateway extends WorkerGatewayGrpc.WorkerGatewayImplBase {
+
+    static final int LEASE_TTL_SECONDS = 3;
 
     private final BlockingQueue<AgentMessage> received = new LinkedBlockingQueue<>();
     private final BlockingQueue<Throwable> streamErrors = new LinkedBlockingQueue<>();
     private final AtomicInteger streams = new AtomicInteger();
     private StreamObserver<ServerCommand> current;
+    private volatile boolean acknowledging = true;
+    private volatile boolean silent;
 
     @Override
     public StreamObserver<AgentMessage> connect(StreamObserver<ServerCommand> responses) {
@@ -36,8 +43,12 @@ final class FakeGateway extends WorkerGatewayGrpc.WorkerGatewayImplBase {
                 if (message.hasRegister()) {
                     send(ServerCommand.newBuilder().setCommandId("cmd-registered")
                             .setRegistered(Registered.newBuilder().setMachineId("machine-" + message.getRegister()
-                                    .getAgentId()).setHeartbeatIntervalSeconds(1).setLeaseTtlSeconds(3))
+                                    .getAgentId()).setHeartbeatIntervalSeconds(1)
+                                    .setLeaseTtlSeconds(LEASE_TTL_SECONDS))
                             .build());
+                } else if (acknowledging && !message.hasProgress()) {
+                    send(ServerCommand.newBuilder()
+                            .setAck(Ack.newBuilder().setMessageId(message.getMessageId())).build());
                 }
             }
 
@@ -54,7 +65,19 @@ final class FakeGateway extends WorkerGatewayGrpc.WorkerGatewayImplBase {
     }
 
     synchronized void send(ServerCommand command) {
-        current.onNext(command);
+        if (!silent) {
+            current.onNext(command);
+        }
+    }
+
+    /** N'acquitte plus aucun message : l'agent doit les garder et les renvoyer. */
+    void stopAcknowledging() {
+        acknowledging = false;
+    }
+
+    /** Le serveur se tait (stream ouvert, plus rien n'en sort), comme un serveur bloqué ou un réseau coupé. */
+    void goSilent() {
+        silent = true;
     }
 
     /** Coupe le stream côté serveur, comme lors d'un redémarrage du serveur. */
@@ -70,6 +93,16 @@ final class FakeGateway extends WorkerGatewayGrpc.WorkerGatewayImplBase {
                 throw new AssertionError("no message received within 5 s");
             }
             if (!message.hasHeartbeat()) {
+                return message;
+            }
+        }
+    }
+
+    /** Prochain message reçu qui vérifie {@code type}, les autres étant ignorés. */
+    AgentMessage next(Predicate<AgentMessage> type) throws InterruptedException {
+        while (true) {
+            AgentMessage message = next();
+            if (type.test(message)) {
                 return message;
             }
         }

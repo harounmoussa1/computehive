@@ -8,6 +8,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tn.eniso.computehive.contracts.worker.v1.AgentMessage;
+import tn.eniso.computehive.contracts.worker.v1.FileKind;
+import tn.eniso.computehive.contracts.worker.v1.JobFile;
 import tn.eniso.computehive.contracts.worker.v1.JobParams;
 import tn.eniso.computehive.contracts.worker.v1.LaunchJob;
 import tn.eniso.computehive.contracts.worker.v1.Outcome;
@@ -242,5 +244,110 @@ class SimulatedAgentTest {
         assertThat(again.getRegister().getRunningList())
                 .containsExactly(RunningJob.newBuilder().setJobId("j-7").setAttemptId(2).build());
         assertThat(gateway.streamCount()).isEqualTo(2);
+    }
+
+    // ───────────────────────── Ack et outbox ─────────────────────────
+
+    @Test
+    void aDurableMessageNotYetAcknowledgedIsSentAgainAfterReconnecting() throws Exception {
+        startAgent(Behaviour.normal().withEpochDuration(Duration.ofSeconds(30)).withMaxReconnectDelay(Duration.ofSeconds(1)));
+        gateway.stopAcknowledging();
+        gateway.send(launch("cmd-L", 10, 0));
+        AgentMessage ack = gateway.next();
+
+        gateway.dropStream();
+
+        assertThat(gateway.next().hasRegister()).isTrue();
+        AgentMessage resent = gateway.next();
+        assertThat(resent.getMessageId()).as("same message, so the server can drop the duplicate")
+                .isEqualTo(ack.getMessageId());
+        assertThat(resent.getCommandAck().getCommandId()).isEqualTo("cmd-L");
+    }
+
+    @Test
+    void anAcknowledgedMessageIsNeverSentAgain() throws Exception {
+        startAgent(Behaviour.normal().withEpochDuration(Duration.ofSeconds(30)).withMaxReconnectDelay(Duration.ofSeconds(1)));
+        gateway.send(launch("cmd-L", 10, 0));
+        gateway.next();
+
+        gateway.dropStream();
+
+        assertThat(gateway.next().hasRegister()).isTrue();
+        assertThat(gateway.quietFor(500)).as("the CommandAck was acknowledged: nothing to resend").isTrue();
+    }
+
+    // ───────────────────────── Fins décidées par l'agent ─────────────────────────
+
+    @Test
+    void withoutNewsFromTheServerForLongerThanTheLeaseTheAgentStopsItsJobItself() throws Exception {
+        startAgent(FAST);
+        gateway.send(launch("cmd-L", 100_000, 0));
+        gateway.next();
+
+        gateway.goSilent();
+
+        AgentMessage fenced = gateway.next(AgentMessage::hasFinished);
+        assertThat(fenced.getFinished().getOutcome()).isEqualTo(Outcome.FENCED);
+        assertThat(fenced.getFinished().getJobId()).isEqualTo("j-7");
+        assertThat(gateway.quietFor(300)).as("the job no longer runs").isTrue();
+    }
+
+    @Test
+    void anAgentRestartedDuringAJobRegistersAgainAndReportsTheJobAsInterrupted() throws Exception {
+        startAgent(FAST.restartingAt(3).withMaxReconnectDelay(Duration.ofSeconds(1)));
+        gateway.send(launch("cmd-L", 10, 0));
+
+        AgentMessage register = gateway.next(AgentMessage::hasRegister);
+        assertThat(register.getRegister().getRunningList()).as("the job process is gone").isEmpty();
+        AgentMessage interrupted = gateway.next(AgentMessage::hasFinished);
+        assertThat(interrupted.getFinished().getOutcome()).isEqualTo(Outcome.INTERRUPTED);
+        assertThat(interrupted.getFinished().getAttemptId()).isEqualTo(2);
+        assertThat(interrupted.getFinished().getLastCheckpointEpoch()).isEqualTo(2);
+        assertThat(gateway.streamCount()).isEqualTo(2);
+    }
+
+    @Test
+    void aJobLongerThanItsMaximumRuntimeFails() throws Exception {
+        startAgent(FAST);
+        gateway.send(ServerCommand.newBuilder().setCommandId("cmd-L").setLaunch(LaunchJob.newBuilder()
+                .setJobId("j-7").setAttemptId(1).setEntrypoint("train.py").addFiles(code())
+                .setConfigJson("{\"epochs\": 100000}").setMaxRuntimeSeconds(1)).build());
+
+        AgentMessage finished = gateway.next(AgentMessage::hasFinished);
+
+        assertThat(finished.getFinished().getOutcome()).isEqualTo(Outcome.FAILED);
+        assertThat(finished.getFinished().getError()).contains("maximum runtime");
+    }
+
+    // ───────────────────────── Jobs « code + config + données » ─────────────────────────
+
+    private static JobFile code() {
+        return JobFile.newBuilder().setKey("files/abc").setSha256("a".repeat(64)).setSizeBytes(2_048)
+                .setKind(FileKind.CODE).setName("projet.zip").build();
+    }
+
+    @Test
+    void aUserJobTakesItsNumberOfEpochsFromItsConfig() throws Exception {
+        startAgent(FAST);
+
+        gateway.send(ServerCommand.newBuilder().setCommandId("cmd-L").setLaunch(LaunchJob.newBuilder()
+                .setJobId("j-9").setAttemptId(1).setEntrypoint("src/train.py").addFiles(code())
+                .setConfigJson("{\"epochs\": 3, \"learning_rate\": 0.001, \"batch_size\": 64}")).build());
+
+        assertThat(gateway.next().getCommandAck().getAccepted()).isTrue();
+        assertThat(gateway.next(AgentMessage::hasProgress).getProgress().getTotalEpochs()).isEqualTo(3);
+        assertThat(gateway.next(AgentMessage::hasFinished).getFinished().getOutcome()).isEqualTo(Outcome.SUCCEEDED);
+    }
+
+    @Test
+    void aUserJobWithoutCodeIsRefused() throws Exception {
+        startAgent(FAST);
+
+        gateway.send(ServerCommand.newBuilder().setCommandId("cmd-L").setLaunch(LaunchJob.newBuilder()
+                .setJobId("j-9").setAttemptId(1).setEntrypoint("src/train.py").setConfigJson("{}")).build());
+
+        AgentMessage refusal = gateway.next();
+        assertThat(refusal.getCommandAck().getAccepted()).isFalse();
+        assertThat(refusal.getCommandAck().getReason()).startsWith("no_code");
     }
 }

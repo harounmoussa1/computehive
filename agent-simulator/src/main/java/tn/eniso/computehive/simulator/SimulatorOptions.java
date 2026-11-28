@@ -35,6 +35,7 @@ record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behavi
               --reject-launches      refuser tous les jobs (CommandAck refusé)
               --fail-at-epoch=N      le script échoue à l'epoch N (Finished FAILED)
               --crash-at-epoch=N     le PC « meurt » à l'epoch N : plus de heartbeat, stream coupé
+              --restart-at-epoch=N   l'agent redémarre à l'epoch N : job perdu, signalé (Finished INTERRUPTED)
               --help                 afficher cette aide
             """;
 
@@ -73,6 +74,7 @@ record SimulatorOptions(String host, int port, List<AgentProfile> agents, Behavi
                 case "--reject-launches" -> behaviour = behaviour.rejectingLaunches();
                 case "--fail-at-epoch" -> behaviour = behaviour.failingAt(positive(name, value));
                 case "--crash-at-epoch" -> behaviour = behaviour.crashingAt(positive(name, value));
+                case "--restart-at-epoch" -> behaviour = behaviour.restartingAt(positive(name, value));
                 default -> throw new IllegalArgumentException("unknown option: " + arg);
             }
         }

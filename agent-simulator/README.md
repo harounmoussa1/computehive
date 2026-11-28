@@ -26,6 +26,7 @@ java -jar agent-simulator/target/agent-simulator.jar --server=localhost:9090 --c
 | `--reject-launches` | refuse tous les jobs | non |
 | `--fail-at-epoch=N` | le script échoue à l'epoch N | non |
 | `--crash-at-epoch=N` | le PC « meurt » à l'epoch N : plus de heartbeat, stream coupé | non |
+| `--restart-at-epoch=N` | l'agent redémarre à l'epoch N : job perdu, réinscription, `Finished(INTERRUPTED)` | non |
 
 ## Ce qu'il fait (docs/worker-protocol.md)
 
@@ -42,6 +43,13 @@ java -jar agent-simulator/target/agent-simulator.jar --server=localhost:9090 --c
 - Reprise : il **télécharge** le checkpoint indiqué par `LaunchJob`, vérifie son SHA-256, et refuse le job
   (`CommandAck` refusé) si le fichier est absent ou corrompu.
 - Arrête le job sur `StopJob` de sa tentative (`Finished(STOPPED)`).
+- Outbox (§6.9) : garde chaque message durable (`CheckpointSaved`, `Finished`, `CommandAck`) jusqu'à son `Ack`
+  et le renvoie, avec le même `message_id`, à chaque réinscription ; il ne répond jamais à un `Ack`.
+- Auto-fencing : sans nouvelles du serveur pendant plus que le bail (`lease_ttl_seconds`), il arrête lui-même
+  son job et le signale par `Finished(FENCED)`.
+- Jobs « code + config + données » (`LaunchJob.entrypoint` rempli) : refusés sans fichier `CODE` (`no_code`) ;
+  le nombre d'epochs et le taux d'apprentissage sont lus dans `config_json` (`epochs`, `learning_rate`). Les
+  fichiers ne sont pas encore téléchargés (étape 10c). `max_runtime_seconds` dépassé : `Finished(FAILED)`.
 - Se reconnecte après une coupure : attente de 1 s, doublée à chaque échec, plafonnée à 15 s ; les
   messages produits pendant la coupure sont envoyés après la réinscription.
 
@@ -61,6 +69,7 @@ Il écrit les mêmes lignes que le script Python (contrat de sortie de `CLAUDE.m
 | le script échoue → job `FAILED` | `--fail-at-epoch=3` |
 | un PC refuse les jobs → le job part ailleurs | `--reject-launches` sur un agent, un second agent normal |
 | le serveur redémarre → reconnexion et resynchronisation | arrêter puis relancer le serveur |
+| l'agent redémarre en plein job → job repris ailleurs (`INTERRUPTED`) | `--restart-at-epoch=4` |
 
 ## Limites (v1)
 
@@ -70,6 +79,6 @@ Il écrit les mêmes lignes que le script Python (contrat de sortie de `CLAUDE.m
 
 | Test | Ce qu'il vérifie |
 |---|---|
-| `SimulatedAgentTest` | face à un faux serveur gRPC : inscription, heartbeats, job complet, reprise, `command_id` rejoué, GPU occupé, refus, `StopJob`, échec, crash, reconnexion |
+| `SimulatedAgentTest` | face à un faux serveur gRPC : inscription, heartbeats, job complet, reprise, `command_id` rejoué, GPU occupé, refus, `StopJob`, échec, crash, reconnexion, renvoi jusqu'à l'`Ack`, auto-fencing, redémarrage, durée maximale, jobs de l'utilisateur |
 | `SimulatedAgentCheckpointTest` | face à un faux stockage HTTP : dépôt avant l'annonce, dépôt refusé non annoncé, reprise après téléchargement vérifié, checkpoint corrompu refusé |
-| `SimulatorUnitsTest` | courbe de perte, clés et empreintes des checkpoints, options de la ligne de commande |
+| `SimulatorUnitsTest` | courbe de perte, clés et empreintes des checkpoints, lecture de `config_json`, options de la ligne de commande |
