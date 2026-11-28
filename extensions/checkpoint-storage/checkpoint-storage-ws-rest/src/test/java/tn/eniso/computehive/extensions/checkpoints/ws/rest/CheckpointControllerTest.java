@@ -16,7 +16,7 @@ import tn.eniso.computehive.core.ws.rest.ApiExceptionHandler;
 import tn.eniso.computehive.extensions.checkpoints.api.CheckpointKey;
 import tn.eniso.computehive.extensions.checkpoints.api.CheckpointStorageException;
 import tn.eniso.computehive.extensions.checkpoints.api.CheckpointStore;
-import tn.eniso.computehive.extensions.checkpoints.api.Sha256;
+import tn.eniso.computehive.core.infra.util.Sha256;
 import tn.eniso.computehive.extensions.checkpoints.api.StoredCheckpoint;
 
 import java.io.ByteArrayInputStream;

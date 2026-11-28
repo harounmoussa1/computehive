@@ -79,6 +79,18 @@
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>dashboard-ws-rest</artifactId>
         </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>files-dal-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>files-service-impl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>files-ws-rest</artifactId>
+        </dependency>
 
         <!-- Module distant : proxy REST de la façade -->
         <dependency>
@@ -95,6 +107,10 @@
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>driver-notif-email</artifactId>
         </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>driver-storage-remote</artifactId>
+        </dependency>
 
         <!-- Exécution : serveur web, JPA, pilote PostgreSQL, santé de l'application, logs JSON -->
         <dependency>
@@ -108,6 +124,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!-- Exposition des métriques au format Prometheus : GET /actuator/prometheus (ADR 0014) -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>

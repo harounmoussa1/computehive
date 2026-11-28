@@ -5,8 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;
+import io.github.resilience4j.micrometer.tagged.TaggedRetryMetrics;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
+import io.github.resilience4j.retry.RetryRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -64,6 +69,9 @@ public final class RemoteModuleClient {
 
     private final String module;
     private final RestClient rest;
+    /** Registres d'un seul élément : c'est par eux que Resilience4j publie ses métriques ({@link #bindTo}). */
+    private final RetryRegistry retries;
+    private final CircuitBreakerRegistry breakers;
     private final Retry retry;
     private final CircuitBreaker breaker;
 
@@ -84,12 +92,13 @@ public final class RemoteModuleClient {
                 .requestInterceptor((request, body, execution) -> withHeaders(token, request, body, execution))
                 .defaultStatusHandler(status -> status.isError(), this::raise)
                 .build();
-        this.retry = Retry.of(module, RetryConfig.custom()
+        this.retries = RetryRegistry.of(RetryConfig.custom()
                 .maxAttempts(policy.maxAttempts())
                 .waitDuration(policy.retryWait())
                 .retryOnException(e -> e instanceof NetworkFailure failure && failure.retryable)
                 .build());
-        this.breaker = CircuitBreaker.of(module, CircuitBreakerConfig.custom()
+        this.retry = retries.retry(module);
+        this.breakers = CircuitBreakerRegistry.of(CircuitBreakerConfig.custom()
                 .slidingWindowSize(policy.slidingWindowSize())
                 .minimumNumberOfCalls(policy.minimumCalls())
                 .failureRateThreshold(policy.failureRateThreshold())
@@ -97,6 +106,7 @@ public final class RemoteModuleClient {
                 .permittedNumberOfCallsInHalfOpenState(1)
                 .recordException(e -> e instanceof NetworkFailure || e instanceof RemoteModuleUnavailableException)
                 .build());
+        this.breaker = breakers.circuitBreaker(module);
         retry.getEventPublisher().onRetry(event -> log.warn("Call to module {} failed, retry {}/{}: {}", module,
                 event.getNumberOfRetryAttempts(), policy.maxAttempts() - 1, event.getLastThrowable().getMessage()));
         breaker.getEventPublisher().onStateTransition(event -> log.warn("Circuit breaker of module {}: {}", module,
@@ -120,6 +130,15 @@ public final class RemoteModuleClient {
     /** État du circuit : {@code CLOSED} (normal), {@code OPEN} (appels refusés), {@code HALF_OPEN} (essai). */
     public CircuitBreaker.State circuitState() {
         return breaker.getState();
+    }
+
+    /**
+     * Publie l'état du circuit et les résultats des appels ({@code resilience4j_circuitbreaker_*},
+     * {@code resilience4j_retry_*}, étiquette {@code name} = nom du module ; ADR 0014).
+     */
+    public void bindTo(MeterRegistry registry) {
+        TaggedCircuitBreakerMetrics.ofCircuitBreakerRegistry(breakers).bindTo(registry);
+        TaggedRetryMetrics.ofRetryRegistry(retries).bindTo(registry);
     }
 
     private <T> T execute(Function<RestClient, T> call, boolean readOnly) {

@@ -134,6 +134,25 @@ computehive:
     shutdown-grace-period: 5s
 ```
 
+## Métriques
+
+Voir l'[ADR 0014](../../docs/adr/0014-metriques-prometheus-grafana.md).
+
+- `AttemptMetrics` (intercepteur `AFTER_ADD` / `AFTER_UPDATE` sur les tentatives) :
+
+  | Série Prometheus | Sens |
+  |---|---|
+  | `computehive_attempts_started_total{start}` | tentatives lancées : `scratch` (de zéro) ou `checkpoint` (reprise après une panne) |
+  | `computehive_attempts_ended_total{outcome}` | tentatives terminées : `completed`, `failed`, `stopped`, `rejected`, `lost` |
+  | `computehive_attempts_active` | tentatives en cours, lues en base à chaque collecte |
+
+- `GatewayMetrics` (`scheduling-ws-grpc`) compte ce que la façade a répondu, sans rien décider :
+
+  | Série Prometheus | Sens |
+  |---|---|
+  | `computehive_agents_connected` | agents au stream ouvert |
+  | `computehive_agent_messages_total{type,outcome}` | messages des agents. `stale` : refusé par le fencing ; `rejected`, `unavailable`, `failed` : refusé ou en échec |
+
 ## Données
 
 Schéma PostgreSQL `scheduling`, tables `assignment` et `processed_agent_message`, migrations Flyway

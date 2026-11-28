@@ -3,6 +3,7 @@
  *
  * Lit GET /api/dashboard toutes les 2 s (pause quand l'onglet est caché), et GET /api/dashboard/jobs/{id} pour
  * le job ouvert. Soumet et annule les jobs par l'API de jobs (POST /api/jobs, DELETE /api/jobs/{id}).
+ * La bibliothèque (codes et datasets) passe par /api/library : dépôt avec barre d'avancement, liste, retrait.
  * Aucune bibliothèque : JavaScript du navigateur seulement. Tout texte venu du serveur passe par esc().
  */
 (() => {
@@ -410,9 +411,137 @@
     openDetails(job.id);
   }
 
+  // ───────────── Bibliothèque (codes et datasets) ─────────────
+
+  const LIBRARY_SECTIONS = { CODE: "code", DATASET: "datasets" };
+  const LIBRARY_LISTS = { CODE: ["library-code", "Aucun code déposé."], DATASET: ["library-datasets", "Aucun dataset déposé."] };
+
+  function currentUser() {
+    return (localStorage.getItem("computehive.userId") || "").trim();
+  }
+
+  function size(bytes) {
+    const units = ["o", "Ko", "Mo", "Go", "To"];
+    let value = bytes;
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+      value /= 1024;
+      unit++;
+    }
+    return `${value.toFixed(unit === 0 || value >= 10 ? 0 : 1)} ${units[unit]}`;
+  }
+
+  /** Nom proposé à partir du nom du fichier : « Mon Dataset v2.zip » donne « Mon-Dataset-v2 ». */
+  function suggestedName(fileName) {
+    return fileName.replace(/\.zip$/i, "").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[^A-Za-z0-9]+/, "").slice(0, 64);
+  }
+
+  async function refreshLibrary() {
+    const userId = currentUser();
+    $("library-user").value = userId;
+    if (!userId) {
+      for (const [listId] of Object.values(LIBRARY_LISTS)) {
+        $(listId).innerHTML = `<li class="muted small">Indiquez votre identifiant pour voir vos fichiers.</li>`;
+      }
+      return;
+    }
+    const response = await fetch("api/library", { headers: { "X-User-Id": userId }, cache: "no-store" });
+    if (!response.ok) {
+      toast(await problem(response), true);
+      return;
+    }
+    const files = await response.json();
+    for (const [kind, [listId, empty]] of Object.entries(LIBRARY_LISTS)) {
+      const mine = files.filter((file) => file.kind === kind);
+      $(listId).innerHTML = mine.length ? mine.map(fileRow).join("") : `<li class="muted small">${empty}</li>`;
+    }
+  }
+
+  function fileRow(file) {
+    const content = file.kind === "CODE"
+      ? `${file.entryCount} fichier(s) : ${file.entries.slice(0, 3).map(esc).join(", ")}${file.entries.length > 3 ? "…" : ""}`
+      : `${file.entryCount} fichier(s), ${size(file.uncompressedBytes)} une fois dézippé`;
+    return `<li>
+      <div>
+        <strong>${esc(file.name)}</strong>
+        <span class="muted small">${size(file.sizeBytes)} · ${content} · ${dateTime(file.uploadedAt)}</span>
+        <span class="muted small mono sha" title="empreinte SHA-256">${esc(file.sha256)}</span>
+      </div>
+      <button type="button" class="icon" data-delete-file="${esc(file.id)}" data-file-name="${esc(file.name)}"
+              aria-label="Retirer ${esc(file.name)}" title="Retirer de la bibliothèque">✕</button>
+    </li>`;
+  }
+
+  /** Dépôt par XMLHttpRequest plutôt que fetch : il donne l'avancement de l'envoi (datasets de plusieurs Go). */
+  function uploadFile(event) {
+    event.preventDefault();
+    const form = event.target;
+    const fields = form.elements;
+    const userId = fields.userId.value.trim();
+    const name = fields.name.value.trim();
+    const file = fields.zip.files[0];
+    if (!userId || !name || !file) return;
+    localStorage.setItem("computehive.userId", userId);
+
+    const error = $("upload-error");
+    const bar = $("upload-progress");
+    const button = $("upload-button");
+    error.hidden = true;
+    bar.value = 0;
+    bar.hidden = false;
+    button.disabled = true;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `api/library/${LIBRARY_SECTIONS[fields.kind.value]}/${encodeURIComponent(name)}`);
+    xhr.setRequestHeader("X-User-Id", userId);
+    const userName = localStorage.getItem("computehive.userName");
+    if (userName) xhr.setRequestHeader("X-User-Name", userName);
+    xhr.setRequestHeader("Content-Type", "application/zip");
+    xhr.upload.onprogress = (progress) => {
+      if (progress.lengthComputable) bar.value = progress.loaded / progress.total;
+    };
+    xhr.onloadend = () => {
+      bar.hidden = true;
+      button.disabled = false;
+      if (xhr.status === 201) {
+        toast(`« ${name} » déposé dans votre bibliothèque`);
+        form.reset();
+        fields.userId.value = userId;
+        refreshLibrary();
+        return;
+      }
+      let detail = xhr.status === 0 ? "Envoi interrompu" : `Erreur ${xhr.status}`;
+      try {
+        detail = JSON.parse(xhr.responseText).detail || detail;
+      } catch {
+        // réponse sans corps JSON : le statut suffit
+      }
+      error.textContent = detail;
+      error.hidden = false;
+    };
+    xhr.send(file);
+  }
+
+  async function deleteFile(fileId, name) {
+    if (!confirm(`Retirer « ${name} » de votre bibliothèque ?`)) return;
+    const response = await fetch(`api/library/${encodeURIComponent(fileId)}`,
+      { method: "DELETE", headers: { "X-User-Id": currentUser() } });
+    if (!response.ok) {
+      toast(await problem(response), true);
+      return;
+    }
+    toast(`« ${name} » retiré`);
+    refreshLibrary();
+  }
+
   // ───────────── Branchements ─────────────
 
   document.addEventListener("click", (event) => {
+    const remove = event.target.closest("[data-delete-file]");
+    if (remove) {
+      deleteFile(remove.dataset.deleteFile, remove.dataset.fileName);
+      return;
+    }
     const cancel = event.target.closest("[data-cancel]");
     if (cancel) {
       event.stopPropagation();
@@ -436,9 +565,20 @@
   $("new-job").addEventListener("click", openSubmit);
   $("submit-cancel").addEventListener("click", () => $("submit-dialog").close());
   $("submit-form").addEventListener("submit", submitJob);
+  $("upload-form").addEventListener("submit", uploadFile);
+  $("upload-form").elements.zip.addEventListener("change", (event) => {
+    const name = $("upload-form").elements.name;
+    const file = event.target.files[0];
+    if (file && !name.value) name.value = suggestedName(file.name);
+  });
+  $("library-user").addEventListener("change", (event) => {
+    localStorage.setItem("computehive.userId", event.target.value.trim());
+    refreshLibrary();
+  });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refresh();
   });
 
   refresh();
+  refreshLibrary();
 })();

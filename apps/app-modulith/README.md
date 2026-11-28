@@ -102,6 +102,7 @@ déclare l'ancienne tentative, et il reçoit `StopJob(STALE_ATTEMPT)` : le job n
 | `GET /api/quotas`, `GET /api/quotas/{userId}` | consommations et priorités |
 | `PUT`, `GET /api/checkpoints/{jobId}/attempts/{n}/epochs/{n}` | dépôt et téléchargement des checkpoints par les agents |
 | `GET /actuator/health` | santé de l'application |
+| `GET /actuator/prometheus` | métriques de tous les modules, au format Prometheus ([ADR 0014](../../docs/adr/0014-metriques-prometheus-grafana.md)) |
 | `localhost:9090` (gRPC) | `WorkerGateway.Connect`, pour les agents |
 
 ## Test de bout en bout

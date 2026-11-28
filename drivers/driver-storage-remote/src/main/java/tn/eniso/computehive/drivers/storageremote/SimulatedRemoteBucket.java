@@ -1,36 +1,35 @@
 package tn.eniso.computehive.drivers.storageremote;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Stockage objet distant <b>simulé</b> (aucun service payant) : il garde les objets en mémoire, et se comporte
- * comme un service réseau capricieux, pour exercer la résilience du driver.
+ * Stockage objet distant <b>simulé</b>, pour les tests : il garde les objets en mémoire, et se comporte comme un
+ * service réseau capricieux, pour exercer la résilience du driver sans lancer de vrai service.
  *
  * <ul>
  *   <li>{@code latency} : délai ajouté à chaque appel ;</li>
  *   <li>{@code failureRate} : proportion d'appels qui échouent au hasard (panne passagère) ;</li>
- *   <li>{@link #setAvailable(boolean)} : coupure franche du service, pour la démo et les tests.</li>
+ *   <li>{@link #setAvailable(boolean)} : coupure franche du service.</li>
  * </ul>
+ *
+ * <p>Les objets sont perdus à l'arrêt : en déploiement, c'est {@link S3RemoteBucket} qui est utilisé.</p>
  */
-public class SimulatedRemoteBucket {
+public class SimulatedRemoteBucket implements RemoteBucket {
 
-    /** Objet stocké : contenu et métadonnées. */
-    public record RemoteObject(byte[] content, String sha256, Instant storedAt) {
+    private record StoredObject(byte[] content, ObjectInfo info) {
     }
 
-    /** Le service distant n'a pas répondu (panne simulée). */
-    public static class RemoteUnavailableException extends RuntimeException {
-        public RemoteUnavailableException(String message) {
-            super(message);
-        }
-    }
-
-    private final Map<String, RemoteObject> objects = new ConcurrentHashMap<>();
+    private final Map<String, StoredObject> objects = new ConcurrentHashMap<>();
     private final Duration latency;
     private final double failureRate;
     private final Random random;
@@ -45,14 +44,30 @@ public class SimulatedRemoteBucket {
         this.random = new Random(seed);
     }
 
-    public void put(String key, RemoteObject object) {
+    @Override
+    public void put(String key, Path file, ObjectInfo info) {
         call();
-        objects.put(key, object);
+        try {
+            objects.put(key, new StoredObject(Files.readAllBytes(file), info));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
-    public Optional<RemoteObject> get(String key) {
+    @Override
+    public Optional<ObjectInfo> stat(String key) {
         call();
-        return Optional.ofNullable(objects.get(key));
+        return Optional.ofNullable(objects.get(key)).map(StoredObject::info);
+    }
+
+    @Override
+    public Optional<InputStream> open(String key, long offset) {
+        call();
+        return Optional.ofNullable(objects.get(key)).map(object -> {
+            byte[] content = object.content();
+            int start = (int) Math.min(offset, content.length);
+            return new ByteArrayInputStream(content, start, content.length - start);
+        });
     }
 
     public void setAvailable(boolean available) {

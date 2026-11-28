@@ -4,6 +4,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.MetadataUtils;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import tn.eniso.computehive.core.infra.security.AgentToken;
@@ -26,7 +27,8 @@ class WorkerGatewayServerTest {
         when(scheduling.registerAgent(any()))
                 .thenReturn(new AgentRegistered("machine-a1", Duration.ofSeconds(10), Duration.ofSeconds(30)));
         AgentSessionRegistry sessions = new AgentSessionRegistry();
-        WorkerGatewayServer server = new WorkerGatewayServer(new WorkerGatewayService(scheduling, sessions),
+        WorkerGatewayServer server = new WorkerGatewayServer(new WorkerGatewayService(scheduling, sessions,
+                new GatewayMetrics(new SimpleMeterRegistry(), sessions)),
                 new AgentTokenInterceptor(AgentToken.of("labo-s3cr3t")), GrpcServerProperties.onPort(0));
 
         server.start();

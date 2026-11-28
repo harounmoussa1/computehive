@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Import;
 import tn.eniso.computehive.drivers.brokermemory.MemoryBrokerConfiguration;
 import tn.eniso.computehive.drivers.notiflog.LogNotifierConfiguration;
-import tn.eniso.computehive.drivers.storagelocal.LocalCheckpointStoreConfiguration;
+import tn.eniso.computehive.drivers.storagelocal.LocalStorageConfiguration;
 
 /**
  * ComputeHive en M/1 : tous les modules dans un seul processus (modulith).
@@ -23,12 +23,13 @@ import tn.eniso.computehive.drivers.storagelocal.LocalCheckpointStoreConfigurati
 @SpringBootApplication(scanBasePackages = {
         "tn.eniso.computehive.core",
         "tn.eniso.computehive.modules",
-        "tn.eniso.computehive.extensions.checkpoints.ws"
+        "tn.eniso.computehive.extensions.checkpoints.ws",
+        "tn.eniso.computehive.extensions.files.ws"
 })
 @Import({
         MemoryBrokerConfiguration.class,
         LogNotifierConfiguration.class,
-        LocalCheckpointStoreConfiguration.class
+        LocalStorageConfiguration.class
 })
 public class ModulithApplication {
 

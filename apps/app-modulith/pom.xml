@@ -84,7 +84,23 @@
         </dependency>
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
+            <artifactId>files-dal-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>files-service-impl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>files-ws-rest</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
             <artifactId>checkpoint-storage-ws-rest</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>file-storage-ws-rest</artifactId>
         </dependency>
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
@@ -111,6 +127,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!-- Exposition des métriques au format Prometheus : GET /actuator/prometheus (ADR 0014) -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>

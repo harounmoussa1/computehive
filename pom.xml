@@ -34,6 +34,9 @@
         <archunit.version>1.3.0</archunit.version>
         <!-- 1.21.x : compatible avec les versions récentes de l'API Docker (CI et Docker Desktop) -->
         <testcontainers.version>1.21.4</testcontainers.version>
+        <!-- 8.5.x : utilise okhttp 4, la version gérée par Spring Boot 3.3 (la 8.6 demande okhttp 5) -->
+        <minio.version>8.5.17</minio.version>
+        <commons-compress.version>1.27.1</commons-compress.version>
         <!-- Logs JSON (Logback), avec les champs du MDC : correlationId, jobId, workerId -->
         <logstash-logback-encoder.version>8.0</logstash-logback-encoder.version>
         <!-- Circuit breaker et retries (stockage distant des checkpoints, appels entre applications en M/P) -->
@@ -98,6 +101,17 @@
                 <groupId>com.tngtech.archunit</groupId>
                 <artifactId>archunit-junit5</artifactId>
                 <version>${archunit.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-compress</artifactId>
+                <version>${commons-compress.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.minio</groupId>
+                <artifactId>minio</artifactId>
+                <version>${minio.version}</version>
             </dependency>
 
             <!-- Sous-projets internes -->
@@ -315,6 +329,36 @@
             </dependency>
             <dependency>
                 <groupId>tn.eniso.computehive</groupId>
+                <artifactId>files-infra</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
+                <artifactId>files-dal-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
+                <artifactId>files-dal-jpa</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
+                <artifactId>files-service-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
+                <artifactId>files-service-impl</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
+                <artifactId>files-ws-rest</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
                 <artifactId>messaging-broker-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -331,6 +375,16 @@
             <dependency>
                 <groupId>tn.eniso.computehive</groupId>
                 <artifactId>checkpoint-storage-ws-rest</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
+                <artifactId>file-storage-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tn.eniso.computehive</groupId>
+                <artifactId>file-storage-ws-rest</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

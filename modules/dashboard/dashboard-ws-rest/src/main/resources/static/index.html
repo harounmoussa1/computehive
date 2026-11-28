@@ -60,6 +60,32 @@
       </section>
     </aside>
   </div>
+
+  <section class="card library" id="library">
+    <div class="card-head">
+      <h2>Ma bibliothèque</h2>
+      <span class="muted small">vos codes et datasets : déposés une fois, choisis à chaque job</span>
+    </div>
+    <form id="upload-form" class="upload">
+      <label>Identifiant<input name="userId" id="library-user" required maxlength="64" placeholder="u-1"></label>
+      <label>Type
+        <select name="kind">
+          <option value="CODE">Code (zip de vos fichiers .py)</option>
+          <option value="DATASET">Dataset (zip de vos données)</option>
+        </select>
+      </label>
+      <label>Fichier zip<input name="zip" type="file" accept=".zip,application/zip" required></label>
+      <label>Nom<input name="name" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,63}"
+                       title="lettres, chiffres, . _ - (sans espace)" placeholder="mnist"></label>
+      <button type="submit" class="btn primary" id="upload-button">Déposer</button>
+      <progress id="upload-progress" max="1" value="0" hidden></progress>
+      <p class="form-error" id="upload-error" hidden></p>
+    </form>
+    <div class="library-lists">
+      <div><h3>Codes</h3><ul id="library-code" class="files"></ul></div>
+      <div><h3>Datasets</h3><ul id="library-datasets" class="files"></ul></div>
+    </div>
+  </section>
 </main>
 
 <aside id="drawer" class="drawer" aria-label="Détail du job" hidden>

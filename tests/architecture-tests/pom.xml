@@ -201,6 +201,36 @@
         </dependency>
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
+            <artifactId>files-infra</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>files-dal-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>files-dal-jpa</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>files-service-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>files-service-impl</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>files-ws-rest</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
             <artifactId>dashboard-infra</artifactId>
             <scope>test</scope>
         </dependency>
@@ -242,6 +272,16 @@
         <dependency>
             <groupId>tn.eniso.computehive</groupId>
             <artifactId>checkpoint-storage-ws-rest</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>file-storage-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tn.eniso.computehive</groupId>
+            <artifactId>file-storage-ws-rest</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

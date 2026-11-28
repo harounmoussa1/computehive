@@ -93,6 +93,18 @@ Content-Type: application/json
 - Les erreurs sont renvoyées au format Problem Details (RFC 9457) par `ApiExceptionHandler`
   (`core-ws-rest`), avec le `correlationId` de la requête.
 
+## Métriques
+
+`JobMetrics` ([ADR 0014](../../docs/adr/0014-metriques-prometheus-grafana.md)) est un intercepteur `AFTER_ADD` / `AFTER_UPDATE`, donc appelé après le commit :
+il compte sans que le code métier le sache.
+
+| Série Prometheus | Sens |
+|---|---|
+| `computehive_jobs_submitted_total` | jobs soumis |
+| `computehive_jobs_finished_total{status}` | jobs terminés : `done`, `failed`, `cancelled` |
+| `computehive_jobs_reassigned_total` | jobs dont le PC a été perdu |
+| `computehive_jobs_active{status}` | jobs `pending`, `running`, `reassigned`, lus en base à chaque collecte |
+
 ## Données
 
 Schéma PostgreSQL `jobs`, table `job`, migrations Flyway dans

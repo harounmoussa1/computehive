@@ -1,6 +1,8 @@
 package tn.eniso.computehive.core.service.restcli;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -166,6 +168,29 @@ class RemoteModuleClientTest {
                 .retrieve().toBodilessEntity()))
                 .isInstanceOf(RemoteModuleUnavailableException.class)
                 .hasMessageStartingWith("Module machines unavailable");
+    }
+
+    @Test
+    void theStateOfEachCircuitIsPublishedAsAMetric() throws Exception {
+        int closedPort;
+        try (ServerSocket socket = new ServerSocket(0)) {
+            closedPort = socket.getLocalPort();
+        }
+        MeterRegistry meters = new SimpleMeterRegistry();
+        RemoteModuleClient unreachable = new RemoteModuleClients(RestClient.builder(), TOKEN, POLICY, meters)
+                .create("machines", "http://localhost:" + closedPort);
+        assertThat(circuitState(meters, "closed")).isEqualTo(1);
+
+        assertThatThrownBy(() -> unreachable.query(rest -> rest.get().uri("/internal/machines").retrieve()
+                .toBodilessEntity())).isInstanceOf(RemoteModuleUnavailableException.class);
+
+        assertThat(unreachable.circuitState()).isEqualTo(CircuitBreaker.State.OPEN);
+        assertThat(circuitState(meters, "open")).isEqualTo(1);
+        assertThat(circuitState(meters, "closed")).isZero();
+    }
+
+    private static double circuitState(MeterRegistry meters, String state) {
+        return meters.get("resilience4j.circuitbreaker.state").tags("name", "machines", "state", state).gauge().value();
     }
 
     @Test

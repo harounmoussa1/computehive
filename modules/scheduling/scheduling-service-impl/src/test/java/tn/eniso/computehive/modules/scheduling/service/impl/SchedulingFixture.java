@@ -51,7 +51,7 @@ class SchedulingFixture {
     final JobPlacement placement = new JobPlacement(jobs, machines, assignments, agents, quotas, clock);
     final LaunchWatchdog watchdog = new LaunchWatchdog(assignments, jobs, agents, lifecycle, properties, clock);
     final Reassignment reassignment = new Reassignment(assignments, jobs, lifecycle, properties, clock);
-    final Reconciler reconciler = new Reconciler(assignments, jobs, machines, lifecycle);
+    final Reconciler reconciler = new Reconciler(assignments, jobs, machines, lifecycle, clock);
     final FakeCheckpointStore checkpointStore = new FakeCheckpointStore();
     final SchedulingModuleImpl scheduling = new SchedulingModuleImpl(machines, jobs, assignments, processed, fencing,
             lifecycle, reassignment, new CheckpointVerifier(checkpointStore), clock);

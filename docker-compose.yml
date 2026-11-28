@@ -1,12 +1,14 @@
-# ComputeHive en M/P sur le PC serveur : deux applications (app-main, app-scheduling), PostgreSQL, Kafka et Mailpit.
+# ComputeHive en M/P sur le PC serveur : deux applications (app-main, app-scheduling), PostgreSQL, Kafka, Mailpit,
+# le stockage de fichiers SeaweedFS (compatible S3, ADR 0015) et la supervision : Prometheus et Grafana (ADR 0014).
 #
-#   1. cp .env.example .env            puis choisir les deux jetons
+#   1. cp .env.example .env            puis choisir les jetons et les identifiants du stockage S3
 #   2. ./mvnw package -DskipTests      construit les jars copiés dans les images
 #   3. docker compose up --build -d    démarre le serveur
 #      docker compose --profile demo up --build -d   … avec deux faux agents GPU (démo sans vrai PC)
 #
 # Les agents des PC du laboratoire se connectent à HOTE:9090 (gRPC) et déposent leurs checkpoints sur
 # http://HOTE:8081 ; les utilisateurs et le tableau de bord passent par http://HOTE:8080.
+# Supervision : Grafana sur http://HOTE:3000 (tableau de bord ComputeHive), Prometheus sur http://HOTE:9091.
 name: computehive
 
 x-internal-token: &internal-token
@@ -65,6 +67,31 @@ services:
     ports:
       - "8025:8025"
 
+  seaweedfs:
+    # Stockage de fichiers compatible S3 (checkpoints, puis codes et datasets) : gratuit, auto-hébergé, persistant
+    # (volume seaweedfs-data). Le fichier d'identités S3 est écrit au démarrage à partir des identifiants de .env.
+    image: chrislusf/seaweedfs:3.80
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?définir S3_ACCESS_KEY dans .env}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?définir S3_SECRET_KEY dans .env}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        printf '{"identities":[{"name":"computehive","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY" > /tmp/s3.json
+        exec weed server -dir=/data -s3 -s3.config=/tmp/s3.json
+    volumes:
+      - seaweedfs-data:/data
+    ports:
+      # Explorateur web des fichiers (filer), réservé au PC serveur : http://localhost:8888
+      - "127.0.0.1:8888:8888"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/healthz"]
+      interval: 5s
+      timeout: 3s
+      start_period: 60s
+      retries: 30
+    restart: unless-stopped
+
   app-main:
     build: apps/app-main
     environment:
@@ -73,6 +100,9 @@ services:
       MAIL_HOST: mailpit
       MAIL_PORT: 1025
       SCHEDULING_URL: http://app-scheduling:8081
+      S3_ENDPOINT: http://seaweedfs:8333
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?définir S3_ACCESS_KEY dans .env}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?définir S3_SECRET_KEY dans .env}
     ports:
       - "8080:8080"
     depends_on:
@@ -82,6 +112,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      seaweedfs:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health > /dev/null"]
       interval: 5s
@@ -97,11 +129,16 @@ services:
       COMPUTEHIVE_AGENTS_TOKEN: ${COMPUTEHIVE_AGENTS_TOKEN:?définir COMPUTEHIVE_AGENTS_TOKEN dans .env}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       MAIN_URL: http://app-main:8080
+      S3_ENDPOINT: http://seaweedfs:8333
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?définir S3_ACCESS_KEY dans .env}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?définir S3_SECRET_KEY dans .env}
     ports:
       - "8081:8081"
       - "9090:9090"
     depends_on:
       app-main:
+        condition: service_healthy
+      seaweedfs:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8081/actuator/health > /dev/null"]
@@ -109,6 +146,42 @@ services:
       timeout: 3s
       start_period: 30s
       retries: 30
+    restart: unless-stopped
+
+  prometheus:
+    # Lit toutes les 15 s les métriques des deux applications (/actuator/prometheus) et les garde 15 jours.
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      # 9091 sur le PC serveur : 9090 est déjà le port gRPC des agents.
+      - "9091:9090"
+    restart: unless-stopped
+
+  grafana:
+    # Source Prometheus et tableau de bord ComputeHive créés au démarrage (observability/grafana). Consultation
+    # sans compte ; modification avec le compte admin (mot de passe GRAFANA_ADMIN_PASSWORD de .env).
+    image: grafana/grafana:11.2.2
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/computehive.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
     restart: unless-stopped
 
   # Profil "demo" : deux faux PC GPU, pour montrer le serveur sans le vrai agent. Pour simuler la panne d'un PC :
@@ -130,3 +203,6 @@ services:
 volumes:
   postgres-data:
   kafka-data:
+  seaweedfs-data:
+  prometheus-data:
+  grafana-data:

@@ -181,7 +181,7 @@ un module dans un autre processus sans réécrire une ligne de code métier.
 |---|---|
 | `messaging-broker-api` : événements entre modules | `driver-broker-memory` (tests, M/1), `driver-broker-kafka` (démo, M/P) |
 | `notifications-api` : prévenir un utilisateur | `driver-notif-log`, `driver-notif-email` (Mailpit, simulé) |
-| `checkpoint-storage-api` : ranger les checkpoints | `driver-storage-local` (disque), `driver-storage-remote` (simulé, Resilience4j) |
+| `checkpoint-storage-api` : ranger les checkpoints | `driver-storage-local` (disque), `driver-storage-remote` (stockage S3 SeaweedFS, Resilience4j) |
 
 | Application | Mode | Contenu |
 |---|---|---|
