@@ -80,3 +80,10 @@ ou annuler un job).
 
 Chaque sous-projet contient un `package-info.java` qui décrit son rôle et son contenu ; chaque
 module a un `README.md`.
+
+## Équipe
+
+Projet de module, cycle ingénieur en informatique appliquée, ENISo.
+
+- Haroun ([@harounmoussa1](https://github.com/harounmoussa1))
+- Helmi Soudana ([@Helmisoudana](https://github.com/Helmisoudana))
