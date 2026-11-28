@@ -162,7 +162,10 @@ Source de vérité : `contracts/worker-proto/src/main/proto/worker.proto` (paque
 - Agent → serveur : `AgentMessage` (`message_id` pour le dédoublonnage) avec `Register`,
   `Heartbeat`, `Progress`, `CheckpointSaved`, `Finished`, `CommandAck`.
 - Serveur → agent : `ServerCommand` (`command_id` pour l'idempotence) avec `Registered`,
-  `LaunchJob`, `StopJob`, `TriggerCheckpoint`.
+  `LaunchJob`, `StopJob`, `TriggerCheckpoint`, et `Ack(message_id)` (sans `command_id`) après chaque heartbeat
+  enregistré et chaque message durable réglé : l'agent le retire de son outbox.
+- Fins décidées par l'agent : `Finished(FENCED)` (bail expiré sans nouvelles du serveur) et `Finished(INTERRUPTED)`
+  (agent redémarré) ; le job est réattribué depuis son dernier checkpoint.
 - Tout message lié à un job porte `(job_id, attempt_id)` : c'est le fencing token.
 - Ne jamais renuméroter ni réutiliser un champ ; toute modification = PR relue par les deux.
 

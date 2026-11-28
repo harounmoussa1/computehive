@@ -40,6 +40,7 @@ import tn.eniso.computehive.modules.scheduling.infra.agent.RunningAttempt;
 import tn.eniso.computehive.modules.scheduling.service.api.SchedulingModule;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -221,6 +222,98 @@ class WorkerGatewayServiceTest {
 
         assertThat(agent.closedStatus().getCode()).isEqualTo(Status.Code.NOT_FOUND);
         assertThat(sessions.isConnected("machine-a1")).isFalse();
+    }
+
+    @Test
+    void jobsStoppedByTheAgentItselfAreReportedAsFencedOrInterrupted() throws Exception {
+        TestAgent agent = connected("a1");
+
+        String fencedId = agent.send(AgentMessage.newBuilder().setFinished(Finished.newBuilder()
+                .setJobId("j-7").setAttemptId(2).setOutcome(Outcome.FENCED).setLastCheckpointEpoch(4)));
+        String interruptedId = agent.send(AgentMessage.newBuilder().setFinished(Finished.newBuilder()
+                .setJobId("j-8").setAttemptId(1).setOutcome(Outcome.INTERRUPTED)));
+
+        verify(scheduling).reportFinished("machine-a1", fencedId,
+                new FinishedReport("j-7", 2, FinishedReport.Outcome.FENCED, null, null, 4));
+        verify(scheduling).reportFinished("machine-a1", interruptedId,
+                new FinishedReport("j-8", 1, FinishedReport.Outcome.INTERRUPTED, null, null, 0));
+    }
+
+    // ───────────────────────── Ack ─────────────────────────
+
+    private List<String> acknowledged(TestAgent agent, int count) throws InterruptedException {
+        List<String> messageIds = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            ServerCommand command = agent.next();
+            assertThat(command.hasAck()).as("command %s is an Ack", command).isTrue();
+            assertThat(command.getCommandId()).as("an Ack is not an order").isEmpty();
+            messageIds.add(command.getAck().getMessageId());
+        }
+        return messageIds;
+    }
+
+    @Test
+    void heartbeatsAndDurableMessagesAreAcknowledgedOnceProcessedButProgressIsNot() throws Exception {
+        TestAgent agent = connected("a1");
+
+        String heartbeatId = agent.send(AgentMessage.newBuilder().setHeartbeat(Heartbeat.getDefaultInstance()));
+        agent.send(AgentMessage.newBuilder().setProgress(Progress.newBuilder().setJobId("j-7").setAttemptId(1)));
+        String checkpointId = agent.send(AgentMessage.newBuilder().setCheckpointSaved(CheckpointSaved.newBuilder()
+                .setJobId("j-7").setAttemptId(1).setEpoch(2)));
+        String finishedId = agent.send(AgentMessage.newBuilder().setFinished(Finished.newBuilder()
+                .setJobId("j-7").setAttemptId(1).setOutcome(Outcome.SUCCEEDED)));
+        String commandAckId = agent.send(AgentMessage.newBuilder().setCommandAck(CommandAck.newBuilder()
+                .setCommandId("cmd-A").setAccepted(true)));
+
+        assertThat(acknowledged(agent, 4)).containsExactly(heartbeatId, checkpointId, finishedId, commandAckId);
+        assertThat(agent.hasNoPendingCommand()).isTrue();
+    }
+
+    @Test
+    void aDuplicateOrStaleMessageIsAcknowledgedSoTheAgentStopsSendingIt() throws Exception {
+        when(scheduling.reportFinished(anyString(), anyString(), any())).thenReturn(MessageOutcome.DUPLICATE);
+        when(scheduling.reportCheckpoint(anyString(), anyString(), any())).thenReturn(MessageOutcome.STALE);
+        TestAgent agent = connected("a1");
+
+        String finishedId = agent.send(AgentMessage.newBuilder().setFinished(Finished.newBuilder()
+                .setJobId("j-7").setAttemptId(1).setOutcome(Outcome.SUCCEEDED)));
+        String checkpointId = agent.send(AgentMessage.newBuilder().setCheckpointSaved(CheckpointSaved.newBuilder()
+                .setJobId("j-7").setAttemptId(1).setEpoch(2)));
+
+        assertThat(acknowledged(agent, 2)).containsExactly(finishedId, checkpointId);
+    }
+
+    @Test
+    void aMessageRejectedForGoodIsAcknowledgedBecauseSendingItAgainWouldNotHelp() throws Exception {
+        when(scheduling.reportFinished(anyString(), anyString(), any()))
+                .thenThrow(new ConflictException("job already DONE"));
+        TestAgent agent = connected("a1");
+
+        String finishedId = agent.send(AgentMessage.newBuilder().setFinished(Finished.newBuilder()
+                .setJobId("j-7").setAttemptId(1).setOutcome(Outcome.SUCCEEDED)));
+
+        assertThat(acknowledged(agent, 1)).containsExactly(finishedId);
+    }
+
+    @Test
+    void aMessageNotProcessedIsNotAcknowledgedSoTheAgentSendsItAgain() throws Exception {
+        when(scheduling.reportFinished(anyString(), anyString(), any()))
+                .thenThrow(new RemoteModuleUnavailableException("jobs", "timeout"));
+        when(scheduling.reportCheckpoint(anyString(), anyString(), any()))
+                .thenThrow(new IllegalStateException("database deadlock"));
+        when(scheduling.heartbeat(anyString(), any()))
+                .thenThrow(new RemoteModuleUnavailableException("machines", "timeout"));
+        TestAgent agent = connected("a1");
+
+        agent.send(AgentMessage.newBuilder().setFinished(Finished.newBuilder()
+                .setJobId("j-7").setAttemptId(1).setOutcome(Outcome.SUCCEEDED)));
+        agent.send(AgentMessage.newBuilder().setCheckpointSaved(CheckpointSaved.newBuilder()
+                .setJobId("j-7").setAttemptId(1).setEpoch(2)));
+        // Bail non prolongé : pas d'Ack, pour que l'agent finisse par arrêter ses jobs s'il ne s'en remet pas.
+        agent.send(AgentMessage.newBuilder().setHeartbeat(Heartbeat.getDefaultInstance()));
+
+        assertThat(agent.isOpen()).isTrue();
+        assertThat(agent.hasNoPendingCommand()).isTrue();
     }
 
     // ───────────────────────── Métriques ─────────────────────────

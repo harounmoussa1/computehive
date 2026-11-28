@@ -41,7 +41,9 @@ Source de vérité : `contracts/worker-proto/src/main/proto/worker.proto` dans l
 Copie-le tel quel dans ton `proto/`, puis remplace `tonic::include_proto!("worker")` par
 `tonic::include_proto!("computehive.worker.v1")`.
 
-**Ajouts proposés pour la v1** (nouveaux numéros uniquement, donc compatibles) :
+**Ajouts pour la v1** (nouveaux numéros uniquement, donc compatibles). Ils sont dans le `worker.proto` du serveur
+depuis la PR 10a, qui attend ta relecture ; le détail des règles est dans `docs/worker-protocol.md` §6.9, §6.10 et
+§8.2 :
 
 ```proto
 message LaunchJob {
@@ -218,7 +220,7 @@ par SHA-256 évite de retélécharger code et datasets déjà présents. Le dét
 
 | PR serveur | Contenu |
 |---|---|
-| 10a | proto ci-dessus ; `Ack` des heartbeats et des messages durables ; `FENCED` et `INTERRUPTED` traités comme une tentative perdue (job relancé ailleurs) ; simulateur mis à jour |
+| 10a (fait, à relire) | proto ci-dessus ; `Ack` des heartbeats et des messages durables ; `FENCED` et `INTERRUPTED` traités comme une tentative perdue (job relancé ailleurs) ; simulateur mis à jour (outbox jusqu'à l'`Ack`, auto-fencing, redémarrage) |
 | 10b | dépôt des codes et datasets ; `GET /api/files/{key}` avec `Range` |
 | 10c | `LaunchJob` complet (`entrypoint`, `config_json`, `files`, `max_runtime_seconds`) ; `PUT /api/results/...` |
 | 10d | tableau de bord : datasets, code, config, résultat ; exemple MNIST |
@@ -237,7 +239,8 @@ par SHA-256 évite de retélécharger code et datasets déjà présents. Le dét
 
 ## 10. Questions à trancher ensemble
 
-1. `Ack` : un par message (proposé), ou par lots (`repeated message_id`) pour réduire le trafic ?
+1. `Ack` : un par message (c'est ce que fait la PR 10a), ou par lots (`repeated message_id`) pour réduire le
+   trafic ? Passer aux lots resterait compatible : un nouveau champ `repeated string message_ids = 2`.
 2. Ajouter `cpu_model` à `Register` ? Le serveur ne s'en sert pas aujourd'hui, mais le tableau de bord pourrait
    l'afficher.
 3. Taille maximale du fichier de résultat (proposé : 2 Go) ?

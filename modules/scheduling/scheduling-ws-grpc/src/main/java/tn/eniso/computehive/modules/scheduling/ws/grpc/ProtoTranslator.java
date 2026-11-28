@@ -1,5 +1,6 @@
 package tn.eniso.computehive.modules.scheduling.ws.grpc;
 
+import tn.eniso.computehive.contracts.worker.v1.Ack;
 import tn.eniso.computehive.contracts.worker.v1.CheckpointSaved;
 import tn.eniso.computehive.contracts.worker.v1.CommandAck;
 import tn.eniso.computehive.contracts.worker.v1.Finished;
@@ -79,8 +80,10 @@ final class ProtoTranslator {
             case SUCCEEDED -> FinishedReport.Outcome.SUCCEEDED;
             case FAILED -> FinishedReport.Outcome.FAILED;
             case STOPPED -> FinishedReport.Outcome.STOPPED;
+            case FENCED -> FinishedReport.Outcome.FENCED;
+            case INTERRUPTED -> FinishedReport.Outcome.INTERRUPTED;
             case OUTCOME_UNSPECIFIED, UNRECOGNIZED -> throw new ValidationException(
-                    "Finished.outcome must be SUCCEEDED, FAILED or STOPPED");
+                    "Finished.outcome must be SUCCEEDED, FAILED, STOPPED, FENCED or INTERRUPTED");
         };
         return new FinishedReport(finished.getJobId(), finished.getAttemptId(), outcome,
                 outcome == FinishedReport.Outcome.SUCCEEDED ? finished.getAccuracy() : null,
@@ -102,6 +105,11 @@ final class ProtoTranslator {
                         .setHeartbeatIntervalSeconds(Math.toIntExact(registered.heartbeatInterval().toSeconds()))
                         .setLeaseTtlSeconds(Math.toIntExact(registered.leaseTtl().toSeconds())))
                 .build();
+    }
+
+    /** Accusé de réception d'un message de l'agent : ce n'est pas un ordre, il n'a donc pas de {@code command_id}. */
+    static ServerCommand ackOf(String messageId) {
+        return ServerCommand.newBuilder().setAck(Ack.newBuilder().setMessageId(messageId)).build();
     }
 
     static ServerCommand toProto(AgentCommand command) {

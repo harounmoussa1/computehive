@@ -15,7 +15,10 @@
 | règles que le serveur applique : fencing, dédoublonnage, un stream par machine | §6.1 à §6.6 |
 | jeton des agents, dans les **en-têtes** gRPC et HTTP | §6.7 |
 | les deux adresses du serveur (gRPC et HTTP), statut `UNAVAILABLE` | §6.8 |
+| **`Ack`**, outbox et bail : quand le serveur accuse réception, quand l'agent arrête ses jobs lui-même | §6.9 |
+| fins décidées par l'agent : `FENCED`, `INTERRUPTED` | §6.10 |
 | **API HTTP des checkpoints** : dépôt et téléchargement des fichiers | §8 et §8.1 |
+| jobs « code + config + données » : `LaunchJob.entrypoint`, `config_json`, `files` | §8.2 |
 
 ## Sommaire
 
@@ -121,20 +124,13 @@ Il reçoit un message, appelle **la façade `SchedulingModule`** (et elle seule)
 | `Finished` | `SchedulingModule.reportFinished(...)` |
 | `CommandAck` | `SchedulingModule.acknowledge(...)` |
 
+Après chaque `Heartbeat` enregistré et chaque message durable réglé, `scheduling-ws-grpc` répond
+`Ack(message_id)` sur le stream (§6.9). C'est un accusé de transport : il dépend seulement de l'issue
+de l'appel à la façade, pas du métier.
+
 Dans l'autre sens, quand `scheduling` décide de lancer ou d'arrêter un job, il passe par le port
 `AgentChannel` (déclaré dans `scheduling-service-api`). Son implémentation, `AgentSessionRegistry`
 (dans `scheduling-ws-grpc`), retrouve le stream ouvert de la bonne machine et y écrit l'ordre.
-
----|---|
-| `Register` | `MachinesModule.register(...)` puis `SchedulingModule.resync(machineId, runningJobs)` |
-| `Heartbeat` | `MachinesModule.heartbeat(...)` puis `SchedulingModule.resync(...)` |
-| `Progress` | `SchedulingModule.reportProgress(...)` (vérifie l'`attemptId`, puis appelle `JobsModule.updateProgress`) |
-| `CheckpointSaved` | `SchedulingModule.reportCheckpoint(...)` |
-| `Finished` | `SchedulingModule.reportFinished(...)` |
-| `CommandAck` | `SchedulingModule.acknowledge(commandId, ...)` |
-
-Dans l'autre sens, quand `scheduling` décide de lancer ou d'arrêter un job, il passe par
-`AgentSessionRegistry`, qui retrouve le stream ouvert de la bonne machine et y écrit l'ordre.
 
 ---
 
@@ -245,6 +241,10 @@ message Finished {
   double  accuracy    = 4;  // si SUCCEEDED
   string  error       = 5;  // si FAILED
   int32   last_checkpoint_epoch = 6;
+  // Fichier de résultat (DONE result=…), déposé AVANT ce message (voir §8.2) ; vide s'il n'y en a pas.
+  string  result_key        = 7;
+  string  result_sha256     = 8;
+  int64   result_size_bytes = 9;
 }
 
 enum Outcome {
@@ -252,6 +252,8 @@ enum Outcome {
   SUCCEEDED           = 1;
   FAILED              = 2;  // le script a échoué (y compris après les relances locales)
   STOPPED             = 3;  // arrêté suite à un StopJob
+  FENCED              = 4;  // arrêté par l'agent lui-même : bail expiré sans nouvelles du serveur
+  INTERRUPTED         = 5;  // l'agent a redémarré pendant le job (processus perdu)
 }
 
 message CommandAck {
@@ -264,6 +266,7 @@ message CommandAck {
 
 message ServerCommand {
   // Identifiant unique de l'ordre. L'agent ne l'exécute qu'une fois.
+  // Vide pour un Ack, qui n'est pas un ordre : l'agent n'y répond jamais par un CommandAck.
   string command_id = 1;
 
   oneof payload {
@@ -271,7 +274,15 @@ message ServerCommand {
     LaunchJob         launch     = 11;
     StopJob           stop       = 12;
     TriggerCheckpoint checkpoint = 13;
+    Ack               ack        = 14;
   }
+}
+
+// Accusé de réception d'un message de l'agent (voir §6.9) : envoyé après chaque Heartbeat enregistré et
+// après chaque message durable (CheckpointSaved, Finished, CommandAck) traité, y compris un doublon ou
+// un message d'une tentative périmée. L'agent retire alors le message de son outbox. Progress n'en reçoit pas.
+message Ack {
+  string message_id = 1;
 }
 
 // Réponse à Register : le serveur fixe les règles du jeu.
@@ -284,12 +295,32 @@ message Registered {
 message LaunchJob {
   string    job_id      = 1;
   int64     attempt_id  = 2;
-  string    job_type    = 3;  // type prédéfini, ex. "MNIST_TRAIN"
-  JobParams params      = 4;
+  string    job_type    = 3;  // type prédéfini, ex. "MNIST_TRAIN" ; ignoré si entrypoint est rempli
+  JobParams params      = 4;  // paramètres du type prédéfini ; ignorés si entrypoint est rempli
   repeated int32 gpu_indices = 5;
   int32  resume_from_epoch      = 6;  // 0 = démarrage depuis zéro
   string resume_checkpoint_key  = 7;
   string resume_checkpoint_sha256 = 8;
+  // Job « code + config + données » (ADR 0013) : voir §8.2.
+  string           entrypoint          = 9;   // script à lancer, chemin relatif dans le zip CODE, ex. "src/train.py"
+  string           config_json         = 10;  // config de l'utilisateur, écrite telle quelle dans job.json
+  repeated JobFile files               = 11;  // exactement un CODE, zéro ou plusieurs DATASET
+  int64            max_runtime_seconds = 12;  // 0 = pas de limite
+}
+
+// Fichier à télécharger avant de lancer le job : GET {http}/api/files/{key}, avec reprise par Range.
+message JobFile {
+  string   key        = 1;
+  string   sha256     = 2;  // à vérifier avant usage ; sert aussi de clé du cache de l'agent
+  int64    size_bytes = 3;
+  FileKind kind       = 4;
+  string   name       = 5;  // DATASET : dézippé dans data/<name>/
+}
+
+enum FileKind {
+  FILE_KIND_UNSPECIFIED = 0;
+  CODE                  = 1;  // dézippé dans code/
+  DATASET               = 2;  // dézippé dans data/<name>/, en lecture seule
 }
 
 message JobParams {
@@ -326,6 +357,18 @@ message TriggerCheckpoint {
 - `UpdatePolicy`, `MetricBatch` et `LogChunk` sont repoussés en v2 (voir §9).
 - `PREEMPTED` n'existe pas en v1, puisqu'il n'y a pas de partage selon l'inactivité.
 - Ajouts : `message_id` (dédoublonnage), `Registered` (le serveur fixe heartbeat et bail), `CommandAck`.
+
+### Ajouts de l'étape 10a (ADR 0013)
+
+Uniquement de nouveaux numéros de champ : un agent ou un serveur qui ne les connaît pas les ignore. Les numéros
+sont figés par `WorkerProtoTest`.
+
+| Où | Ajout | Utilisé par le serveur |
+|---|---|---|
+| `ServerCommand` | `Ack ack = 14` | dès 10a (§6.9) |
+| `Outcome` | `FENCED = 4`, `INTERRUPTED = 5` | dès 10a (§6.10) |
+| `LaunchJob` | `entrypoint = 9`, `config_json = 10`, `files = 11` (`JobFile`, `FileKind`), `max_runtime_seconds = 12` | rempli à partir de 10c (§8.2) |
+| `Finished` | `result_key = 7`, `result_sha256 = 8`, `result_size_bytes = 9` | lu à partir de 10c (§8.2) |
 
 ---
 
@@ -411,6 +454,44 @@ exemple quand `app-main` redémarre. Le stream est alors fermé avec le statut g
 L'agent se reconnecte avec son attente croissante habituelle. Ce n'est pas un refus du jeton, qui est
 `UNAUTHENTICATED`.
 
+### 6.9 `Ack`, outbox et bail
+
+L'agent garde chaque message **durable** dans son outbox et le renvoie tant que le serveur ne l'a pas acquitté.
+Le serveur répond `Ack(message_id)` sur le stream :
+
+| Message de l'agent | `Ack` envoyé quand… | Pas d'`Ack` quand… |
+|---|---|---|
+| `Heartbeat` | le bail de la machine est prolongé (heartbeat enregistré par `machines`) | `machines` est injoignable (M/P) ou refuse le heartbeat |
+| `CheckpointSaved`, `Finished`, `CommandAck` | le message est **réglé** : traité, doublon (§6.4), tentative périmée (§6.3), ou refusé pour de bon (donnée invalide, conflit d'état : le renvoyer donnerait la même réponse) | un module est injoignable (`UNAVAILABLE`) ou le traitement a échoué de façon inattendue : l'agent doit le renvoyer |
+| `Progress` | jamais : message volatil, le suivant le remplace | — |
+| `Register` | jamais : la réponse est `Registered` | — |
+
+- `Ack` **n'est pas un ordre** : son `command_id` est vide et l'agent n'y répond **jamais** par un `CommandAck`.
+- Un `Ack` porte un seul `message_id` (pas de lot en v1).
+- Un message renvoyé après une reconnexion garde **le même** `message_id` : le serveur le reconnaît (§6.4) et
+  l'acquitte sans le rejouer.
+
+**Bail côté agent (auto-fencing).** L'agent note l'heure du dernier message reçu du serveur (`Ack`, ordre,
+`Registered`). Si plus de `lease_ttl_seconds` passent sans rien recevoir alors qu'un job tourne, le serveur a
+déclaré la machine `DEAD` (§6.1) et relance le job ailleurs : l'agent arrête donc le job lui-même et le signale
+par `Finished(FENCED)` dès qu'il retrouve le serveur (§6.10). Comme le serveur n'acquitte un heartbeat qu'une fois
+le bail prolongé, l'agent et le serveur mesurent le même délai : le job ne tourne jamais deux fois.
+
+### 6.10 Fins de tentative décidées par l'agent
+
+| `Finished.outcome` | Cause | Réaction du serveur (tentative courante) |
+|---|---|---|
+| `SUCCEEDED` | le script a écrit `DONE` | job `DONE`, machine libérée |
+| `FAILED` | le script a échoué, ou a dépassé `max_runtime_seconds` | job `FAILED`, machine libérée |
+| `STOPPED` | l'agent a exécuté un `StopJob` | le job garde le statut que le serveur lui a déjà donné |
+| `FENCED` | bail expiré sans nouvelles du serveur (§6.9) | tentative `LOST`, job `REASSIGNED`, machine libérée ; le job reprend ailleurs depuis son dernier checkpoint |
+| `INTERRUPTED` | l'agent a redémarré pendant le job (processus perdu, retrouvé au démarrage) | comme `FENCED` |
+
+Pour la tentative courante, `FENCED` et `INTERRUPTED` n'entraînent pas de `StopJob` : le job ne tourne plus. Si le
+message concerne une tentative déjà remplacée (cas habituel de `FENCED` : la machine était `DEAD` et le job déjà
+relancé), il est périmé (§6.3) : le serveur l'ignore, l'acquitte et envoie le `StopJob(STALE_ATTEMPT)` habituel,
+sans effet puisque l'agent ne fait plus tourner ce job.
+
 ---
 
 ## 7. Séquences principales
@@ -423,6 +504,7 @@ Agent                                          Serveur
   │ ── Register(agent_id, GPU, running=[]) ─────► │ MachinesModule.register → ONLINE
   │ ◄── Registered(machine_id, 10 s, 30 s) ────── │
   │ ── Heartbeat (toutes les 10 s) ─────────────► │ MachinesModule.heartbeat
+  │ ◄── Ack(message_id du heartbeat) ──────────── │ bail prolongé
 ```
 
 ### 7.2 Lancement d'un job
@@ -431,9 +513,12 @@ Agent                                          Serveur
   │                                               │ scheduling : job 7 → PC-12, attempt 1
   │ ◄── LaunchJob(job 7, attempt 1, cmd-A) ────── │
   │ ── CommandAck(cmd-A, accepted) ─────────────► │ job 7 → RUNNING, machine → BUSY
-  │ ── Progress(job 7, attempt 1, epoch 1) ─────► │ JobsModule.updateProgress
+  │ ◄── Ack ───────────────────────────────────── │
+  │ ── Progress(job 7, attempt 1, epoch 1) ─────► │ JobsModule.updateProgress (pas d'Ack)
   │ ── CheckpointSaved(job 7, attempt 1, ep 2) ─► │ lastCheckpointEpoch = 2
+  │ ◄── Ack ───────────────────────────────────── │
   │ ── Finished(job 7, attempt 1, SUCCEEDED) ───► │ job 7 → DONE ; quotas mis à jour
+  │ ◄── Ack ───────────────────────────────────── │
 ```
 
 ### 7.3 Panne d'une machine
@@ -533,6 +618,34 @@ curl -i http://HOTE:8081/api/checkpoints/job-test/attempts/1/epochs/2 \
 
 **Implémentation de référence** : `agent-simulator`, classe `CheckpointClient` (dépôt et
 téléchargement) et `SimulatedAgent` (ordre dépôt → annonce, vérification avant reprise).
+
+### 8.2 Jobs « code + config + données » (ADR 0013)
+
+Un `LaunchJob` dont `entrypoint` est rempli lance **le code de l'utilisateur** ; `job_type` et `params` sont alors
+ignorés. Les champs existent dans `worker.proto` depuis 10a ; le serveur les remplit à partir de 10c. Détail côté
+agent : `docs/alignement-agent-v1.md` §5 et §6.
+
+| Champ | Rôle |
+|---|---|
+| `entrypoint` | script à lancer, chemin relatif dans le zip `CODE` (ex. `src/train.py`) |
+| `config_json` | config de l'utilisateur, écrite telle quelle dans `job.json` ; le serveur ne l'interprète pas |
+| `files` | exactement un `CODE` (dézippé dans `code/`), zéro ou plusieurs `DATASET` (dézippés dans `data/<name>/`, lecture seule) |
+| `max_runtime_seconds` | au-delà, l'agent arrête le script et envoie `Finished(FAILED)` ; `0` = pas de limite |
+
+**Préparer le job** : pour chaque `JobFile`, `GET /api/files/{key}` (même jeton, même adresse que les
+checkpoints). Le serveur répond `200` (ou `206` avec `Range: bytes=<début>-` pour reprendre un transfert) et
+l'en-tête `X-File-Sha256`. Vérifier le SHA-256 avant usage ; un fichier déjà en cache sous ce SHA-256 n'est pas
+retéléchargé. Fichier absent, corrompu, ou aucun `CODE` : refuser le job (`CommandAck(accepted=false)`, raison
+`no_code` pour ce dernier cas).
+
+**Lancer**, avec le dossier `work/<job_id>/<attempt_id>/` comme répertoire courant :
+
+```
+python code/<entrypoint> --config job.json [--resume checkpoints/<fichier de reprise>]
+```
+
+**Résultat** (`DONE result=<chemin>`) : déposé **avant** `Finished`, puis annoncé dans `Finished.result_key`,
+`result_sha256` et `result_size_bytes` (API de dépôt ajoutée en 10c).
 
 ---
 

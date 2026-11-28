@@ -139,6 +139,10 @@ public class SchedulingModuleImpl implements SchedulingModule {
                 case FAILED -> lifecycle.finish(assignment, JobStatusUpdate.failed(report.error()),
                         a -> a.fail(report.error(), clock.instant()));
                 case STOPPED -> lifecycle.finish(assignment, null, a -> a.stop("stopped by the agent", clock.instant()));
+                // Ni ordre du serveur ni fin du script : le job repart ailleurs, depuis son dernier checkpoint.
+                case FENCED -> lifecycle.reassignLostByAgent(assignment,
+                        "agent stopped the job itself: its lease expired without news from the server");
+                case INTERRUPTED -> lifecycle.reassignLostByAgent(assignment, "agent restarted during the job");
             }
             return true;
         });

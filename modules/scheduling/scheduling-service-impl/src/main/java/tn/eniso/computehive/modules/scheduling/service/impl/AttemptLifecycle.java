@@ -128,12 +128,24 @@ public class AttemptLifecycle {
      * {@code StopJob(REASSIGNED)} au cas où il ferait encore tourner le job.</p>
      */
     public void reassign(Assignment assignment, String reason) {
+        lose(assignment, reason);
+        sendStop(assignment.getMachine().id(), assignment.getJob().id(), assignment.getAttemptId(),
+                AgentCommand.StopReason.REASSIGNED);
+    }
+
+    /**
+     * L'agent a lui-même perdu la tentative ({@code Finished(FENCED)} ou {@code Finished(INTERRUPTED)}) : comme
+     * {@link #reassign}, mais sans {@code StopJob}, puisque le job ne tourne plus sur le PC.
+     */
+    public void reassignLostByAgent(Assignment assignment, String reason) {
+        lose(assignment, reason);
+    }
+
+    private void lose(Assignment assignment, String reason) {
         if (endIfActive(assignment, a -> a.lose(reason, clock.instant()))) {
             release(assignment);
         }
         reassignJobIfRunning(assignment.getJob().id(), assignment.getMachine().id());
-        sendStop(assignment.getMachine().id(), assignment.getJob().id(), assignment.getAttemptId(),
-                AgentCommand.StopReason.REASSIGNED);
         log.warn("Attempt {} of job {} on {} lost ({}): job will resume elsewhere", assignment.getAttemptId(),
                 assignment.getJob().id(), assignment.getMachine().name(), reason);
     }

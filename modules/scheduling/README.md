@@ -47,7 +47,7 @@ qui a le moins consommé passe d'abord), puis du plus ancien au plus récent :
 | `CommandAck` | accepté : tentative et job `RUNNING` ; refusé : tentative `REJECTED`, machine libérée, job replacé ailleurs |
 | `Progress` | avancement du job |
 | `CheckpointSaved` | nouveau checkpoint officiel du job, **après vérification** (`CheckpointVerifier`, ADR 0008) : la clé correspond à la tentative, le fichier a été déposé, son SHA-256 est celui annoncé |
-| `Finished` | job `DONE` ou `FAILED`, tentative terminée, machine libérée ; `STOPPED` libère seulement la machine |
+| `Finished` | job `DONE` ou `FAILED`, tentative terminée, machine libérée ; `STOPPED` libère seulement la machine ; `FENCED` ou `INTERRUPTED` (job arrêté par l'agent lui-même) : tentative `LOST`, job `REASSIGNED`, repris ailleurs depuis son dernier checkpoint, sans `StopJob` (docs/worker-protocol.md §6.10) |
 
 - **Resynchronisation** : l'agent déclare ses jobs en cours ; toute tentative qui n'est pas la tentative
   active reçoit `StopJob(STALE_ATTEMPT)`.
@@ -95,6 +95,9 @@ reçu est traduit (`ProtoTranslator`) en **un** appel de `SchedulingModule`, san
 - Ordre à l'inscription : `registerAgent`, ouverture de la session, `Registered`, puis `resynchronize`,
   pour que les `StopJob` de la resynchronisation trouvent la session ouverte.
 - Un message refusé par le module est journalisé ; le stream reste ouvert pour les suivants.
+- `Ack(message_id)` répond à chaque heartbeat enregistré et à chaque message durable (`CheckpointSaved`,
+  `Finished`, `CommandAck`) réglé, même doublon, périmé ou refusé pour de bon ; pas d'`Ack` si un module est
+  injoignable ou si le traitement échoue, pour que l'agent renvoie le message (docs/worker-protocol.md §6.9).
 - Un heartbeat d'une machine inconnue ferme le stream (`NOT_FOUND`) : l'agent se réinscrit.
 - En M/P, si `machines` est injoignable au moment de l'inscription, le stream est fermé avec
   `UNAVAILABLE` : l'agent se reconnecte plus tard (docs/worker-protocol.md §6.8).
@@ -179,9 +182,9 @@ dans `scheduling-dal-jpa/src/main/resources/db/migration/scheduling` (voir ADR 0
 | `AssignmentTest` | statuts d'une tentative, renvoi, reprise |
 | `SchedulingRepositoriesIT` | migrations, garanties de la base contre les doublons, dédoublonnage atomique (PostgreSQL) |
 | `AssignmentCrudServiceTest` | intercepteurs autour de chaque écriture |
-| `WorkerGatewayServiceTest` | porte gRPC (serveur en mémoire, faux agent) : traduction, ordres, inscription, reconnexion, erreurs |
+| `WorkerGatewayServiceTest` | porte gRPC (serveur en mémoire, faux agent) : traduction, ordres, inscription, reconnexion, erreurs, `Ack` |
 | `WorkerGatewayServerTest` | vrai serveur Netty sur un port libre : connexion d'un agent par le réseau, arrêt propre |
-| `ReassignmentScenariosTest` | 13 scénarios : panne de machine et reprise depuis le checkpoint, ancienne machine écartée par le fencing, job disparu, annulation, réconciliation après un événement perdu, abonnements |
+| `ReassignmentScenariosTest` | 17 scénarios : panne de machine et reprise depuis le checkpoint, ancienne machine écartée par le fencing, job arrêté par l'agent (`FENCED`, `INTERRUPTED`), job disparu, annulation, réconciliation après un événement perdu, abonnements |
 | `SchedulingConfigurationTest` | une tâche périodique survit à un module distant injoignable (M/P) |
 | `SchedulingScenariosTest` | 30 scénarios : placement (dont la priorité par quotas), checkpoint non déposé, corrompu ou d'une autre tentative refusé, refus, accusé perdu, message rejoué, tentative périmée, reprise depuis un checkpoint, resynchronisation, annulation, renvoi puis abandon |
 
