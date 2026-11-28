@@ -24,6 +24,10 @@ public record FinishedReport(String jobId, long attemptId, Outcome outcome, Doub
         /** Le script a échoué, y compris après les relances locales de l'agent. */
         FAILED,
         /** Arrêté suite à un {@code StopJob} du serveur. */
-        STOPPED
+        STOPPED,
+        /** Arrêté par l'agent lui-même : son bail a expiré sans nouvelles du serveur (auto-fencing). */
+        FENCED,
+        /** L'agent a redémarré pendant le job : le processus est perdu. */
+        INTERRUPTED
     }
 }

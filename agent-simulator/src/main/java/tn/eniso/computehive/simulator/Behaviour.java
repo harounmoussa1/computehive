@@ -10,36 +10,49 @@ import java.time.Duration;
  * @param rejectLaunches    refuser tous les {@code LaunchJob} ({@code CommandAck(accepted = false)})
  * @param failAtEpoch       le script échoue à cette epoch ({@code Finished(FAILED)}) ; 0 : jamais
  * @param crashAtEpoch      le PC « meurt » à cette epoch : plus aucun message, stream coupé ; 0 : jamais
+ * @param restartAtEpoch    l'agent redémarre à cette epoch : le job est perdu, l'agent se réinscrit et le
+ *                          signale ({@code Finished(INTERRUPTED)}) ; 0 : jamais
  * @param maxReconnectDelay attente maximale entre deux tentatives de reconnexion (protocole : 15 s)
  */
 public record Behaviour(Duration epochDuration, int checkpointEvery, boolean rejectLaunches, int failAtEpoch,
-                        int crashAtEpoch, Duration maxReconnectDelay) {
+                        int crashAtEpoch, int restartAtEpoch, Duration maxReconnectDelay) {
 
     public static Behaviour normal() {
-        return new Behaviour(Duration.ofSeconds(1), 2, false, 0, 0, Duration.ofSeconds(15));
+        return new Behaviour(Duration.ofSeconds(1), 2, false, 0, 0, 0, Duration.ofSeconds(15));
     }
 
     public Behaviour withEpochDuration(Duration value) {
-        return new Behaviour(value, checkpointEvery, rejectLaunches, failAtEpoch, crashAtEpoch, maxReconnectDelay);
+        return new Behaviour(value, checkpointEvery, rejectLaunches, failAtEpoch, crashAtEpoch, restartAtEpoch,
+                maxReconnectDelay);
     }
 
     public Behaviour withCheckpointEvery(int value) {
-        return new Behaviour(epochDuration, value, rejectLaunches, failAtEpoch, crashAtEpoch, maxReconnectDelay);
+        return new Behaviour(epochDuration, value, rejectLaunches, failAtEpoch, crashAtEpoch, restartAtEpoch,
+                maxReconnectDelay);
     }
 
     public Behaviour rejectingLaunches() {
-        return new Behaviour(epochDuration, checkpointEvery, true, failAtEpoch, crashAtEpoch, maxReconnectDelay);
+        return new Behaviour(epochDuration, checkpointEvery, true, failAtEpoch, crashAtEpoch, restartAtEpoch,
+                maxReconnectDelay);
     }
 
     public Behaviour failingAt(int epoch) {
-        return new Behaviour(epochDuration, checkpointEvery, rejectLaunches, epoch, crashAtEpoch, maxReconnectDelay);
+        return new Behaviour(epochDuration, checkpointEvery, rejectLaunches, epoch, crashAtEpoch, restartAtEpoch,
+                maxReconnectDelay);
     }
 
     public Behaviour crashingAt(int epoch) {
-        return new Behaviour(epochDuration, checkpointEvery, rejectLaunches, failAtEpoch, epoch, maxReconnectDelay);
+        return new Behaviour(epochDuration, checkpointEvery, rejectLaunches, failAtEpoch, epoch, restartAtEpoch,
+                maxReconnectDelay);
+    }
+
+    public Behaviour restartingAt(int epoch) {
+        return new Behaviour(epochDuration, checkpointEvery, rejectLaunches, failAtEpoch, crashAtEpoch, epoch,
+                maxReconnectDelay);
     }
 
     public Behaviour withMaxReconnectDelay(Duration value) {
-        return new Behaviour(epochDuration, checkpointEvery, rejectLaunches, failAtEpoch, crashAtEpoch, value);
+        return new Behaviour(epochDuration, checkpointEvery, rejectLaunches, failAtEpoch, crashAtEpoch, restartAtEpoch,
+                value);
     }
 }

@@ -34,6 +34,9 @@ import java.util.function.Supplier;
  *       reste ouvert pour les suivants.</li>
  *   <li>Un heartbeat d'une machine inconnue ferme le stream ({@code NOT_FOUND}) : l'agent se reconnecte et se
  *       réinscrit.</li>
+ *   <li>{@code Ack(message_id)} répond à chaque heartbeat enregistré et à chaque message durable réglé
+ *       ({@code CheckpointSaved}, {@code Finished}, {@code CommandAck}) : l'agent cesse alors de le renvoyer.
+ *       {@code Progress} n'en reçoit pas.</li>
  * </ul>
  *
  * <p>L'issue de chaque message est comptée ({@link GatewayMetrics}).</p>
@@ -163,6 +166,8 @@ public class WorkerGatewayService extends WorkerGatewayGrpc.WorkerGatewayImplBas
                     try {
                         metrics.received(message,
                                 scheduling.heartbeat(machineId, ProtoTranslator.toHeartbeat(message.getHeartbeat())));
+                        // Le bail est prolongé : l'Ack le dit à l'agent, qui sinon finirait par arrêter ses jobs.
+                        acknowledge(message);
                     } catch (NotFoundException e) {
                         metrics.received(message, GatewayMetrics.REJECTED);
                         closeUnknownMachine();
@@ -173,11 +178,11 @@ public class WorkerGatewayService extends WorkerGatewayGrpc.WorkerGatewayImplBas
                 }
                 case PROGRESS -> safely(message, () -> scheduling.reportProgress(machineId, messageId,
                         ProtoTranslator.toProgress(message.getProgress())));
-                case CHECKPOINT_SAVED -> safely(message, () -> scheduling.reportCheckpoint(machineId, messageId,
+                case CHECKPOINT_SAVED -> durable(message, () -> scheduling.reportCheckpoint(machineId, messageId,
                         ProtoTranslator.toCheckpoint(message.getCheckpointSaved())));
-                case FINISHED -> safely(message, () -> scheduling.reportFinished(machineId, messageId,
+                case FINISHED -> durable(message, () -> scheduling.reportFinished(machineId, messageId,
                         ProtoTranslator.toFinished(message.getFinished())));
-                case COMMAND_ACK -> safely(message, () -> scheduling.acknowledge(machineId, messageId,
+                case COMMAND_ACK -> durable(message, () -> scheduling.acknowledge(machineId, messageId,
                         ProtoTranslator.toAck(message.getCommandAck())));
                 case REGISTER -> {
                     metrics.received(message, MessageOutcome.IGNORED);
@@ -190,21 +195,48 @@ public class WorkerGatewayService extends WorkerGatewayGrpc.WorkerGatewayImplBas
             }
         }
 
-        /** Un message refusé ou en échec est journalisé ; le stream reste ouvert pour les messages suivants. */
-        private void safely(AgentMessage message, Supplier<MessageOutcome> call) {
+        /**
+         * Message durable, gardé par l'outbox de l'agent jusqu'à son {@code Ack} : l'accusé part dès que le message
+         * est réglé (docs/worker-protocol.md §6.9).
+         */
+        private void durable(AgentMessage message, Supplier<MessageOutcome> call) {
+            if (safely(message, call)) {
+                acknowledge(message);
+            }
+        }
+
+        /**
+         * Un message refusé ou en échec est journalisé ; le stream reste ouvert pour les messages suivants.
+         *
+         * @return {@code true} si le message est réglé : traité, ou refusé pour de bon (le renvoyer donnerait la
+         *         même réponse) ; {@code false} si un module est injoignable ou si le traitement a échoué, auquel cas
+         *         l'agent doit le renvoyer
+         */
+        private boolean safely(AgentMessage message, Supplier<MessageOutcome> call) {
             try {
                 metrics.received(message, call.get());
+                return true;
             } catch (RemoteModuleUnavailableException e) {
                 metrics.received(message, GatewayMetrics.UNAVAILABLE);
                 log.warn("{} message {} not processed, a module is unreachable; the agent may send it again: {}",
                         message.getPayloadCase(), message.getMessageId(), e.getMessage());
+                return false;
             } catch (ComputeHiveException e) {
                 metrics.received(message, GatewayMetrics.REJECTED);
                 log.warn("{} message {} rejected: {}", message.getPayloadCase(), message.getMessageId(), e.getMessage());
+                return true;
             } catch (RuntimeException e) {
                 metrics.received(message, GatewayMetrics.FAILED);
                 log.error("{} message {} failed; the agent may send it again", message.getPayloadCase(),
                         message.getMessageId(), e);
+                return false;
+            }
+        }
+
+        /** Un message sans {@code message_id} ne peut pas être acquitté : l'agent ne peut pas l'attendre. */
+        private void acknowledge(AgentMessage message) {
+            if (!message.getMessageId().isEmpty()) {
+                session.send(ProtoTranslator.ackOf(message.getMessageId()));
             }
         }
 

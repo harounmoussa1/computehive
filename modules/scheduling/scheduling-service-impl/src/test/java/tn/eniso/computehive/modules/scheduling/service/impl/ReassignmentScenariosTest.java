@@ -16,6 +16,8 @@ import tn.eniso.computehive.modules.scheduling.infra.agent.AgentCommand.StopReas
 import tn.eniso.computehive.modules.scheduling.infra.agent.AgentHeartbeat;
 import tn.eniso.computehive.modules.scheduling.infra.agent.CheckpointReport;
 import tn.eniso.computehive.modules.scheduling.infra.agent.CommandAckReport;
+import tn.eniso.computehive.modules.scheduling.infra.agent.FinishedReport;
+import tn.eniso.computehive.modules.scheduling.infra.agent.FinishedReport.Outcome;
 import tn.eniso.computehive.modules.scheduling.infra.agent.MessageOutcome;
 import tn.eniso.computehive.modules.scheduling.infra.agent.ProgressReport;
 import tn.eniso.computehive.modules.scheduling.infra.agent.RunningAttempt;
@@ -162,6 +164,66 @@ class ReassignmentScenariosTest {
         f.scheduling.heartbeat(pc, new AgentHeartbeat(8_000L, 95, List.of(new RunningAttempt(job.id(), 1))));
 
         assertThat(f.jobs.get(job.id()).status()).isEqualTo(JobStatus.RUNNING);
+    }
+
+    // ───────────────────────── Job arrêté par l'agent lui-même ─────────────────────────
+
+    @Test
+    void aJobFencedByItsAgentResumesOnAnotherMachineFromTheLastCheckpoint() {
+        String pc12 = f.connectGpuAgent("a12");
+        JobInfo job = runningJobOn(pc12);
+        checkpoint(pc12, job, 4);
+
+        MessageOutcome outcome = f.scheduling.reportFinished(pc12, f.messageId(),
+                new FinishedReport(job.id(), 1, Outcome.FENCED, null, null, 4));
+
+        assertThat(outcome).isEqualTo(MessageOutcome.ACCEPTED);
+        assertThat(f.jobs.get(job.id()).status()).isEqualTo(JobStatus.REASSIGNED);
+        assertThat(f.scheduling.attemptsOf(job.id())).singleElement().satisfies(attempt -> {
+            assertThat(attempt.status()).isEqualTo(AssignmentStatus.LOST);
+            assertThat(attempt.endReason()).contains("lease expired");
+        });
+        assertThat(f.machines.statusOf(pc12)).as("the machine is free again").isEqualTo(MachineStatus.ONLINE);
+        assertThat(f.agents.stops(pc12)).as("the job no longer runs there: no StopJob").isEmpty();
+
+        String pc15 = f.connectGpuAgent("a15");
+        f.machines.markDead(pc12);
+        f.placement.placeWaitingJobs();
+
+        AgentCommand.LaunchJob relaunch = f.lastLaunch(pc15);
+        assertThat(relaunch.attemptId()).isEqualTo(2);
+        assertThat(relaunch.resumeFromEpoch()).isEqualTo(4);
+    }
+
+    @Test
+    void aJobInterruptedByARestartOfItsAgentIsReassigned() {
+        String pc = f.connectGpuAgent("a1");
+        JobInfo job = runningJobOn(pc);
+
+        f.scheduling.reportFinished(pc, f.messageId(),
+                new FinishedReport(job.id(), 1, Outcome.INTERRUPTED, null, null, 0));
+
+        assertThat(f.jobs.get(job.id()).status()).isEqualTo(JobStatus.REASSIGNED);
+        assertThat(f.scheduling.attemptsOf(job.id())).singleElement()
+                .extracting(AssignmentInfo::endReason).asString().contains("restarted");
+    }
+
+    @Test
+    void aLateFencedReportOfAnOldAttemptChangesNothing() {
+        String pc12 = f.connectGpuAgent("a12");
+        JobInfo job = runningJobOn(pc12);
+        f.machines.markDead(pc12);
+        f.reassignment.onMachineDead(pc12, "pc-a12");
+        String pc15 = f.connectGpuAgent("a15");
+        f.placement.placeWaitingJobs();
+        f.scheduling.acknowledge(pc15, f.messageId(), new CommandAckReport(f.lastLaunch(pc15).commandId(), true, null));
+
+        MessageOutcome late = f.scheduling.reportFinished(pc12, f.messageId(),
+                new FinishedReport(job.id(), 1, Outcome.FENCED, null, null, 0));
+
+        assertThat(late).isEqualTo(MessageOutcome.STALE);
+        assertThat(f.jobs.get(job.id()).status()).isEqualTo(JobStatus.RUNNING);
+        assertThat(f.currentAttempt(job.id()).attemptId()).isEqualTo(2);
     }
 
     // ───────────────────────── Annulation ─────────────────────────

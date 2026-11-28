@@ -106,6 +106,10 @@ message Finished {
   double  accuracy    = 4;  // si SUCCEEDED
   string  error       = 5;  // si FAILED
   int32   last_checkpoint_epoch = 6;
+  // Fichier de résultat (DONE result=…), déposé AVANT ce message (voir §8.2) ; vide s'il n'y en a pas.
+  string  result_key        = 7;
+  string  result_sha256     = 8;
+  int64   result_size_bytes = 9;
 }
 
 enum Outcome {
@@ -113,6 +117,8 @@ enum Outcome {
   SUCCEEDED           = 1;
   FAILED              = 2;  // le script a échoué (y compris après les relances locales)
   STOPPED             = 3;  // arrêté suite à un StopJob
+  FENCED              = 4;  // arrêté par l'agent lui-même : bail expiré sans nouvelles du serveur
+  INTERRUPTED         = 5;  // l'agent a redémarré pendant le job (processus perdu)
 }
 
 message CommandAck {
@@ -125,6 +131,7 @@ message CommandAck {
 
 message ServerCommand {
   // Identifiant unique de l'ordre. L'agent ne l'exécute qu'une fois.
+  // Vide pour un Ack, qui n'est pas un ordre : l'agent n'y répond jamais par un CommandAck.
   string command_id = 1;
 
   oneof payload {
@@ -132,7 +139,15 @@ message ServerCommand {
     LaunchJob         launch     = 11;
     StopJob           stop       = 12;
     TriggerCheckpoint checkpoint = 13;
+    Ack               ack        = 14;
   }
+}
+
+// Accusé de réception d'un message de l'agent (voir §6.9) : envoyé après chaque Heartbeat enregistré et
+// après chaque message durable (CheckpointSaved, Finished, CommandAck) traité, y compris un doublon ou
+// un message d'une tentative périmée. L'agent retire alors le message de son outbox. Progress n'en reçoit pas.
+message Ack {
+  string message_id = 1;
 }
 
 // Réponse à Register : le serveur fixe les règles du jeu.
@@ -145,12 +160,32 @@ message Registered {
 message LaunchJob {
   string    job_id      = 1;
   int64     attempt_id  = 2;
-  string    job_type    = 3;  // type prédéfini, ex. "MNIST_TRAIN"
-  JobParams params      = 4;
+  string    job_type    = 3;  // type prédéfini, ex. "MNIST_TRAIN" ; ignoré si entrypoint est rempli
+  JobParams params      = 4;  // paramètres du type prédéfini ; ignorés si entrypoint est rempli
   repeated int32 gpu_indices = 5;
   int32  resume_from_epoch      = 6;  // 0 = démarrage depuis zéro
   string resume_checkpoint_key  = 7;
   string resume_checkpoint_sha256 = 8;
+  // Job « code + config + données » (ADR 0013) : voir §8.2.
+  string           entrypoint          = 9;   // script à lancer, chemin relatif dans le zip CODE, ex. "src/train.py"
+  string           config_json         = 10;  // config de l'utilisateur, écrite telle quelle dans job.json
+  repeated JobFile files               = 11;  // exactement un CODE, zéro ou plusieurs DATASET
+  int64            max_runtime_seconds = 12;  // 0 = pas de limite
+}
+
+// Fichier à télécharger avant de lancer le job : GET {http}/api/files/{key}, avec reprise par Range.
+message JobFile {
+  string   key        = 1;
+  string   sha256     = 2;  // à vérifier avant usage ; sert aussi de clé du cache de l'agent
+  int64    size_bytes = 3;
+  FileKind kind       = 4;
+  string   name       = 5;  // DATASET : dézippé dans data/<name>/
+}
+
+enum FileKind {
+  FILE_KIND_UNSPECIFIED = 0;
+  CODE                  = 1;  // dézippé dans code/
+  DATASET               = 2;  // dézippé dans data/<name>/, en lecture seule
 }
 
 message JobParams {

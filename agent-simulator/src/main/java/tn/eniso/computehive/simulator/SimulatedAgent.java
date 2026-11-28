@@ -9,6 +9,7 @@ import tn.eniso.computehive.contracts.worker.v1.AgentMessage;
 import tn.eniso.computehive.contracts.worker.v1.Capabilities;
 import tn.eniso.computehive.contracts.worker.v1.CheckpointSaved;
 import tn.eniso.computehive.contracts.worker.v1.CommandAck;
+import tn.eniso.computehive.contracts.worker.v1.FileKind;
 import tn.eniso.computehive.contracts.worker.v1.Finished;
 import tn.eniso.computehive.contracts.worker.v1.GpuInfo;
 import tn.eniso.computehive.contracts.worker.v1.GpuSample;
@@ -23,11 +24,12 @@ import tn.eniso.computehive.contracts.worker.v1.StopJob;
 import tn.eniso.computehive.contracts.worker.v1.WorkerGatewayGrpc;
 
 import java.time.Duration;
-import java.util.ArrayDeque;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Queue;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -46,8 +48,11 @@ import java.util.concurrent.TimeUnit;
  *   <li>exécute un {@code LaunchJob} en simulant l'entraînement ({@link SimulatedTraining}) : {@code Progress} à
  *       chaque epoch, {@code CheckpointSaved} régulièrement, puis {@code Finished} ;</li>
  *   <li>arrête le job sur {@code StopJob} ({@code Finished(STOPPED)}) ;</li>
- *   <li>se reconnecte après une coupure, avec une attente croissante plafonnée ; les messages produits pendant
- *       la coupure sont gardés et envoyés après la réinscription.</li>
+ *   <li>garde chaque message durable ({@code CheckpointSaved}, {@code Finished}, {@code CommandAck}) jusqu'à son
+ *       {@code Ack}, et le renvoie à chaque réinscription tant qu'il n'est pas acquitté ;</li>
+ *   <li>arrête lui-même son job si le serveur reste muet plus longtemps que le bail ({@code Finished(FENCED)}) :
+ *       le serveur l'a sans doute déjà relancé ailleurs ;</li>
+ *   <li>se reconnecte après une coupure, avec une attente croissante plafonnée.</li>
  * </ul>
  *
  * <p>Il écrit sur sa sortie les mêmes lignes que le script Python ({@code PROGRESS}, {@code CHECKPOINT},
@@ -59,6 +64,7 @@ public final class SimulatedAgent implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(SimulatedAgent.class);
     private static final long GPU_MEMORY_USED_BY_A_JOB_MB = 3_000;
     private static final Duration FIRST_RECONNECT_DELAY = Duration.ofSeconds(1);
+    private static final Duration LEASE_CHECK_PERIOD = Duration.ofMillis(250);
 
     private final WorkerGatewayGrpc.WorkerGatewayStub stub;
     private final AgentProfile profile;
@@ -67,13 +73,18 @@ public final class SimulatedAgent implements AutoCloseable {
     private final ScheduledExecutorService thread;
 
     private final Set<String> executedCommands = new HashSet<>();
-    private final Queue<AgentMessage> outbox = new ArrayDeque<>();
+    /** Outbox, dans l'ordre d'envoi : messages durables pas encore acquittés, et messages produits hors connexion. */
+    private final Map<String, AgentMessage> pending = new LinkedHashMap<>();
     private StreamObserver<AgentMessage> stream;
     private boolean registered;
     private String machineId;
     private ScheduledFuture<?> heartbeats;
+    private Duration leaseTtl;
+    private long lastServerContactNanos;
+    private ScheduledFuture<?> leaseWatch;
     private SimulatedTraining training;
     private ScheduledFuture<?> epochs;
+    private ScheduledFuture<?> runtimeLimit;
     private Duration reconnectDelay = FIRST_RECONNECT_DELAY;
     private boolean crashed;
     private boolean closed;
@@ -179,15 +190,19 @@ public final class SimulatedAgent implements AutoCloseable {
         if (crashed || closed) {
             return;
         }
+        lastServerContactNanos = System.nanoTime();
         switch (command.getPayloadCase()) {
             case REGISTERED -> onRegistered(command);
             case LAUNCH -> onLaunch(command.getCommandId(), command.getLaunch());
             case STOP -> onStop(command.getCommandId(), command.getStop());
             case CHECKPOINT -> acknowledge(command.getCommandId(), true, null);
+            // Un Ack n'est pas un ordre : on retire le message de l'outbox, sans jamais y répondre.
+            case ACK -> pending.remove(command.getAck().getMessageId());
             case PAYLOAD_NOT_SET -> log.warn("Empty command {} ignored", command.getCommandId());
         }
     }
 
+    /** Inscrit : heartbeats, surveillance du bail, puis renvoi de l'outbox dans l'ordre. */
     private void onRegistered(ServerCommand command) {
         registered = true;
         machineId = command.getRegistered().getMachineId();
@@ -195,9 +210,20 @@ public final class SimulatedAgent implements AutoCloseable {
         long interval = Math.max(1, command.getRegistered().getHeartbeatIntervalSeconds());
         cancel(heartbeats);
         heartbeats = thread.scheduleAtFixedRate(this::sendHeartbeat, interval, interval, TimeUnit.SECONDS);
-        log.info("Agent {} registered as machine {} (heartbeat every {} s)", profile.agentId(), machineId, interval);
-        while (!outbox.isEmpty()) {
-            stream.onNext(outbox.poll());
+        leaseTtl = Duration.ofSeconds(Math.max(1, command.getRegistered().getLeaseTtlSeconds()));
+        if (leaseWatch == null) {
+            long period = LEASE_CHECK_PERIOD.toMillis();
+            leaseWatch = thread.scheduleAtFixedRate(this::checkLease, period, period, TimeUnit.MILLISECONDS);
+        }
+        log.info("Agent {} registered as machine {} (heartbeat every {} s, lease {} s)", profile.agentId(), machineId,
+                interval, leaseTtl.toSeconds());
+        Iterator<AgentMessage> outbox = pending.values().iterator();
+        while (outbox.hasNext()) {
+            AgentMessage message = outbox.next();
+            stream.onNext(message);
+            if (!isDurable(message)) {
+                outbox.remove();
+            }
         }
     }
 
@@ -215,6 +241,12 @@ public final class SimulatedAgent implements AutoCloseable {
             acknowledge(commandId, false, "GPU already busy with job " + training.jobId());
             return;
         }
+        boolean userJob = !launch.getEntrypoint().isEmpty();
+        if (userJob && launch.getFilesList().stream().noneMatch(file -> file.getKind() == FileKind.CODE)) {
+            // Comme l'agent réel : un job « code + config + données » sans zip de code ne peut pas tourner.
+            acknowledge(commandId, false, "no_code: the job has no CODE file");
+            return;
+        }
         if (launch.getResumeFromEpoch() > 0 && checkpoints != null) {
             try {
                 // Comme l'agent réel : télécharger le checkpoint et vérifier son empreinte avant de reprendre.
@@ -226,13 +258,24 @@ public final class SimulatedAgent implements AutoCloseable {
             }
         }
         acknowledge(commandId, true, null);
-        training = new SimulatedTraining(launch.getJobId(), launch.getAttemptId(), launch.getParams().getEpochs(),
-                launch.getParams().getLearningRate(), launch.getResumeFromEpoch());
-        log.info("Job {} attempt {} started{}", launch.getJobId(), launch.getAttemptId(),
+        // Job prédéfini : epochs et taux d'apprentissage dans params. Job de l'utilisateur : dans sa config JSON.
+        training = userJob
+                ? new SimulatedTraining(launch.getJobId(), launch.getAttemptId(),
+                        JobConfig.epochs(launch.getConfigJson()), JobConfig.learningRate(launch.getConfigJson()),
+                        launch.getResumeFromEpoch())
+                : new SimulatedTraining(launch.getJobId(), launch.getAttemptId(), launch.getParams().getEpochs(),
+                        launch.getParams().getLearningRate(), launch.getResumeFromEpoch());
+        log.info("Job {} attempt {} started{}{}", launch.getJobId(), launch.getAttemptId(),
+                userJob ? " (" + launch.getEntrypoint() + ", " + launch.getFilesCount() + " file(s))" : "",
                 launch.getResumeFromEpoch() == 0 ? "" : " from checkpoint " + launch.getResumeCheckpointKey()
                         + " (epoch " + launch.getResumeFromEpoch() + ")");
         long period = behaviour.epochDuration().toMillis();
         epochs = thread.scheduleAtFixedRate(this::runEpoch, period, period, TimeUnit.MILLISECONDS);
+        if (launch.getMaxRuntimeSeconds() > 0) {
+            SimulatedTraining limited = training;
+            runtimeLimit = thread.schedule(() -> exceedRuntime(limited, launch.getMaxRuntimeSeconds()),
+                    launch.getMaxRuntimeSeconds(), TimeUnit.SECONDS);
+        }
     }
 
     private void onStop(String commandId, StopJob stop) {
@@ -254,6 +297,10 @@ public final class SimulatedAgent implements AutoCloseable {
         int epoch = training.nextEpoch();
         if (epoch == behaviour.crashAtEpoch()) {
             crash();
+            return;
+        }
+        if (epoch == behaviour.restartAtEpoch()) {
+            restart();
             return;
         }
         if (epoch == behaviour.failAtEpoch()) {
@@ -301,6 +348,12 @@ public final class SimulatedAgent implements AutoCloseable {
     }
 
     private void finish(Outcome outcome, String error) {
+        send(message().setFinished(finished(outcome, error)));
+        log.info("Job {} attempt {} finished: {}", training.jobId(), training.attemptId(), outcome);
+        endTraining();
+    }
+
+    private Finished.Builder finished(Outcome outcome, String error) {
         Finished.Builder finished = Finished.newBuilder()
                 .setJobId(training.jobId()).setAttemptId(training.attemptId()).setOutcome(outcome)
                 .setLastCheckpointEpoch(training.lastCheckpointEpoch());
@@ -310,10 +363,39 @@ public final class SimulatedAgent implements AutoCloseable {
         if (error != null) {
             finished.setError(error);
         }
-        send(message().setFinished(finished));
-        log.info("Job {} attempt {} finished: {}", training.jobId(), training.attemptId(), outcome);
+        return finished;
+    }
+
+    private void endTraining() {
         cancel(epochs);
+        cancel(runtimeLimit);
         training = null;
+    }
+
+    /** Durée maximale du job ({@code LaunchJob.max_runtime_seconds}) dépassée : le job échoue. */
+    private void exceedRuntime(SimulatedTraining limited, long maxRuntimeSeconds) {
+        if (training == limited) {
+            finish(Outcome.FAILED, "maximum runtime of " + maxRuntimeSeconds + " s exceeded");
+        }
+    }
+
+    /**
+     * Auto-fencing (docs/worker-protocol.md §6.9) : sans nouvelles du serveur depuis plus que le bail, celui-ci a
+     * déclaré la machine {@code DEAD} et relance le job ailleurs. L'agent l'arrête donc lui-même, pour qu'il ne
+     * tourne jamais deux fois, et le signale dès qu'il retrouve le serveur ({@code Finished(FENCED)}).
+     */
+    private void checkLease() {
+        if (training == null || leaseTtl == null) {
+            return;
+        }
+        Duration silence = Duration.ofNanos(System.nanoTime() - lastServerContactNanos);
+        if (silence.compareTo(leaseTtl) > 0) {
+            log.warn("Agent {}: no news from the server for {} s (lease {} s): job {} stopped (fenced)",
+                    profile.agentId(), silence.toSeconds(), leaseTtl.toSeconds(), training.jobId());
+            System.out.printf("[%s] FENCED job=%s attempt=%d%n", profile.agentId(), training.jobId(),
+                    training.attemptId());
+            finish(Outcome.FENCED, null);
+        }
     }
 
     /** Le PC « meurt » : plus aucun message, stream coupé sans fermeture propre, aucune reconnexion. */
@@ -325,6 +407,26 @@ public final class SimulatedAgent implements AutoCloseable {
         if (stream != null) {
             stream.onError(Status.UNAVAILABLE.withDescription("simulated crash").asRuntimeException());
         }
+    }
+
+    /**
+     * L'agent redémarre : le processus du job est perdu et le stream coupé. Comme l'agent réel au démarrage
+     * ({@code recover_jobs}), il se réinscrit sans job en cours et signale la tentative perdue
+     * ({@code Finished(INTERRUPTED)}) ; son outbox, persistante chez l'agent réel, est conservée.
+     */
+    private void restart() {
+        log.warn("Agent {} RESTARTED at epoch {} of job {} (simulated)", profile.agentId(), training.epoch(),
+                training.jobId());
+        StreamObserver<AgentMessage> broken = stream;
+        stream = null;   // l'ancien stream ne déclenche pas de reconnexion : celle-ci est programmée ici
+        registered = false;
+        cancel(heartbeats);
+        if (broken != null) {
+            broken.onError(Status.UNAVAILABLE.withDescription("simulated restart").asRuntimeException());
+        }
+        send(message().setFinished(finished(Outcome.INTERRUPTED, null)));
+        endTraining();
+        thread.schedule(this::connect, FIRST_RECONNECT_DELAY.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     // ───────────────────────── Messages vers le serveur ─────────────────────────
@@ -350,19 +452,28 @@ public final class SimulatedAgent implements AutoCloseable {
         send(message().setCommandAck(ack));
     }
 
-    /** Envoie le message, ou le garde jusqu'à la prochaine inscription si le stream est coupé. */
+    /**
+     * Envoie le message. Un message durable reste dans l'outbox jusqu'à son {@code Ack} ; hors connexion, tout
+     * message sauf le heartbeat y attend la prochaine inscription.
+     */
     private void send(AgentMessage.Builder message) {
         AgentMessage built = message.build();
+        if (isDurable(built) || (!registered && !built.hasHeartbeat())) {
+            pending.put(built.getMessageId(), built);
+        }
         if (registered) {
             stream.onNext(built);
-        } else if (!built.hasHeartbeat()) {
-            outbox.add(built);
         }
+    }
+
+    /** Messages dont la perte fausserait l'état du serveur : renvoyés jusqu'à leur {@code Ack}. */
+    private static boolean isDurable(AgentMessage message) {
+        return message.hasCheckpointSaved() || message.hasFinished() || message.hasCommandAck();
     }
 
     private Register register() {
         Register.Builder register = Register.newBuilder()
-                .setAgentId(profile.agentId()).setName(profile.name()).setAgentVersion("simulator-0.1.0")
+                .setAgentId(profile.agentId()).setName(profile.name()).setAgentVersion("simulator-0.2.0")
                 .setOs("linux").setCpuCores(profile.cpuCores()).setRamTotalMb(profile.ramTotalMb())
                 .setCapabilities(Capabilities.newBuilder().setCuda(profile.hasGpu()));
         if (profile.hasGpu()) {
@@ -385,7 +496,9 @@ public final class SimulatedAgent implements AutoCloseable {
 
     private void cancelTimers() {
         cancel(heartbeats);
+        cancel(leaseWatch);
         cancel(epochs);
+        cancel(runtimeLimit);
     }
 
     private static void cancel(ScheduledFuture<?> task) {
